@@ -1,0 +1,31 @@
+# requirements.txt — Stroke Rehabilitation Maze Game
+#
+# Install with:
+#     pip install -r requirements.txt
+#
+# All packages listed are available on PyPI.
+# The hand_landmarker.task model (~7.8 MB) is downloaded automatically
+# on first run by vision/hand_tracker.py.
+
+# Computer vision & hand tracking
+opencv-contrib-python>=4.8.0
+mediapipe>=0.10.0
+
+# Numerical computing (metrics)
+numpy>=1.24.0
+
+# Image utilities (optional, used for future asset loading)
+Pillow>=10.0.0
+
+# ── EMG hardware (install only if using physical sensors) ────────────────────
+# Uncomment the relevant line and set config.EMG_ENABLED = True
+#
+# BITalino (r)evolution kit:
+#   pyserial>=3.5
+#   bitalino>=2.1.0
+#
+# Myo Armband:
+#   MyoPy>=0.0.12
+#
+# Generic serial ADC:
+#   pyserial>=3.5

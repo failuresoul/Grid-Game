@@ -4,9 +4,9 @@ main.py — Entry Point: Stroke Rehabilitation Maze Game
 Run with:
     python main.py
 
-Keyboard controls (while window is focused):
+Keyboard controls (game window must be focused):
     1 / 2 / 3     Select difficulty (Easy / Medium / Hard)
-    ENTER / SPACE Start game (from start screen)
+    ENTER / SPACE Start game from selection screen
     R             Restart current level
     N             Next level (same difficulty)
     P             Pause / Resume
@@ -14,40 +14,42 @@ Keyboard controls (while window is focused):
     ESC           Quit
 
 Architecture:
-    main.py → HandTracker → (cx,cy)
-                          → GameState.update() → collision / win detection
-                          → MetricsCollector.record()
-              Renderer.draw(game, dt, pip_frame) → canvas
-              cv2.imshow("Rehab Game", canvas)
+    main.py
+        vision.hand_tracker  →  (cx, cy) cursor
+        game.maze            →  Level layout
+        game.game_engine     →  State machine + collision
+        metrics.performance  →  Clinical metrics + CSV
+        ui.renderer          →  OpenCV frame composition
+        emg.emg_interface    →  (disabled stub, imported only if EMG_ENABLED)
 
 EMG:
-    Disabled (config.EMG_ENABLED = False).
-    See emg_interface.py for re-activation instructions.
+    Completely isolated in the emg/ package.
+    Set config.EMG_ENABLED = True and configure EMG_PORT / EMG_DEVICE
+    to re-activate hardware support.  See emg/emg_interface.py for details.
 """
 
 from __future__ import annotations
 import logging
-import time
 import sys
-import os
+import time
 
 import cv2
 import numpy as np
 
 import config
-from hand_tracker   import HandTracker
-from maze_generator import MazeGenerator
-from game_state     import GameState, State
-from renderer       import Renderer
-from metrics        import MetricsCollector
+from vision.hand_tracker   import HandTracker
+from game.maze             import MazeGenerator
+from game.game_engine      import GameEngine, GameState
+from metrics.performance   import MetricsCollector
+from ui.renderer           import Renderer
 
-# ── Optional EMG (disabled by default) ───────────────────────────────────────
+# ── EMG: imported only when explicitly enabled ────────────────────────────────
 if config.EMG_ENABLED:
-    from emg_interface import EMGInterface
+    from emg.emg_interface import EMGInterface
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Logging setup
+#  Logging
 # ─────────────────────────────────────────────────────────────────────────────
 
 logging.basicConfig(
@@ -59,30 +61,24 @@ log = logging.getLogger("main")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Game Application
+#  Application
 # ─────────────────────────────────────────────────────────────────────────────
 
 class RehabGame:
-    """
-    Top-level application class.  Owns the main loop and wires all subsystems.
-    """
+    """Top-level application — owns the main loop and wires all subsystems."""
 
     WINDOW_NAME = "Hand Rehabilitation Maze"
 
     def __init__(self) -> None:
-        # ── Selected difficulty and level index ───────────────────────────────
-        self.difficulty: int  = config.DEFAULT_DIFFICULTY
-        self.level_index: int = 0
+        self.difficulty:   int  = config.DEFAULT_DIFFICULTY
+        self.level_index:  int  = 0
+        self._start_screen: bool = True
 
-        # ── Game screen (START_SCREEN shown first) ─────────────────────────────
-        self._on_start_screen: bool = True
-
-        # ── Subsystems (created in _setup) ────────────────────────────────────
-        self.cap:       cv2.VideoCapture | None = None
-        self.tracker:   HandTracker      | None = None
-        self.maze_gen:  MazeGenerator           = MazeGenerator()
-        self.renderer:  Renderer                = Renderer()
-        self.game:      GameState        | None = None
+        self.cap:      cv2.VideoCapture | None = None
+        self.tracker:  HandTracker      | None = None
+        self.maze_gen: MazeGenerator           = MazeGenerator()
+        self.renderer: Renderer                = Renderer()
+        self.engine:   GameEngine       | None = None
 
         # ── EMG (disabled) ────────────────────────────────────────────────────
         self.emg = None
@@ -93,31 +89,28 @@ class RehabGame:
         #         sample_rate=config.EMG_SAMPLE_RATE,
         #         channels=config.EMG_CHANNELS,
         #     )
-        #     connected = self.emg.connect()
-        #     if not connected:
+        #     if not self.emg.connect():
         #         log.warning("EMG device failed to connect — continuing without EMG.")
         #         self.emg = None
 
     # ─────────────────────────────────────────────────────────────────────────
-    #  Setup
+    #  Setup helpers
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _setup_camera(self) -> bool:
-        """Open webcam and set resolution.  Returns False if unavailable."""
+    def _open_camera(self) -> bool:
         self.cap = cv2.VideoCapture(config.CAMERA_INDEX, cv2.CAP_DSHOW)
         if not self.cap.isOpened():
-            # Fallback: try without backend hint
             self.cap = cv2.VideoCapture(config.CAMERA_INDEX)
         if not self.cap.isOpened():
-            log.error("Could not open webcam — no camera detected.")
+            log.error("No webcam detected.")
             return False
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH,  config.CAMERA_WIDTH)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, config.CAMERA_HEIGHT)
-        self.cap.set(cv2.CAP_PROP_FPS, config.TARGET_FPS)
+        self.cap.set(cv2.CAP_PROP_FPS,          config.TARGET_FPS)
         log.info(f"Camera opened (index={config.CAMERA_INDEX})")
         return True
 
-    def _setup_tracker(self) -> None:
+    def _build_tracker(self) -> None:
         diff_cfg = config.DIFFICULTIES[self.difficulty]
         if self.tracker is not None:
             self.tracker.close()
@@ -129,39 +122,27 @@ class RehabGame:
         )
 
     def _new_game(self) -> None:
-        """Create a fresh GameState for the current difficulty + level."""
         diff_cfg = config.DIFFICULTIES[self.difficulty]
         level    = self.maze_gen.get_level(self.difficulty, self.level_index)
-
-        metrics = MetricsCollector(start=level.start, end=level.end)
-
-        self.game = GameState(
-            level=level,
-            difficulty_cfg=diff_cfg,
-            metrics_collector=metrics,
-        )
-
-        # Reset tracker smoothing so cursor snaps to hand on restart
+        metrics  = MetricsCollector(start=level.start, end=level.end)
+        self.engine = GameEngine(level=level, difficulty_cfg=diff_cfg,
+                                 metrics_collector=metrics)
         if self.tracker:
             self.tracker.reset_smoothing()
-
-        log.info(f"New game: diff={diff_cfg.name}  level={level.name}")
+        log.info(f"New game: {diff_cfg.name}  |  {level.name}")
 
     # ─────────────────────────────────────────────────────────────────────────
     #  Main loop
     # ─────────────────────────────────────────────────────────────────────────
 
     def run(self) -> None:
-        """Start the application and block until the user quits."""
         log.info("=== Rehab Maze Game starting ===")
 
-        if not self._setup_camera():
-            self._run_no_camera()
+        if not self._open_camera():
+            self._no_camera_screen()
             return
 
-        self._setup_tracker()
-
-        # Create OpenCV window (resizable for different monitor sizes)
+        self._build_tracker()
         cv2.namedWindow(self.WINDOW_NAME, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(self.WINDOW_NAME, config.CANVAS_WIDTH, config.CANVAS_HEIGHT)
 
@@ -169,83 +150,54 @@ class RehabGame:
 
         try:
             while True:
-                # ── Frame timing ──────────────────────────────────────────────
                 now = time.perf_counter()
-                dt  = min(now - prev_time, 0.1)   # cap dt to 100 ms
+                dt  = min(now - prev_time, 0.1)
                 prev_time = now
 
-                # ── Read webcam frame ─────────────────────────────────────────
                 ok, cam_frame = self.cap.read()
                 if not ok:
-                    log.warning("Empty camera frame — retrying.")
                     time.sleep(0.01)
                     continue
 
-                # Flip horizontally so it's a mirror image for PiP
-                cam_frame_display = cv2.flip(cam_frame, 1)
-
                 # ── Hand tracking ─────────────────────────────────────────────
-                pip_frame: np.ndarray | None = None
-                cursor = None
-
-                if self.tracker is not None:
-                    cursor = self.tracker.process(cam_frame)
+                cursor    = None
+                pip_frame = None
+                if self.tracker:
+                    cursor    = self.tracker.process(cam_frame)
                     pip_frame = self.tracker.annotated_frame
 
                 # ── Start screen ──────────────────────────────────────────────
-                if self._on_start_screen:
+                if self._start_screen:
                     canvas = self.renderer.draw_start_screen(self.difficulty)
-                    if pip_frame is not None and config.CAMERA_PIP_ENABLED:
-                        from renderer import _draw_text
-                        # Draw PiP manually on start screen
-                        pw, ph = config.PIP_WIDTH, config.PIP_HEIGHT
-                        try:
-                            thumb = cv2.resize(pip_frame, (pw, ph))
-                            x1 = config.CANVAS_WIDTH - pw - 10
-                            y1 = 10
-                            canvas[y1:y1+ph, x1:x1+pw] = thumb
-                            cv2.rectangle(canvas,
-                                          (x1-1, y1-1), (x1+pw+1, y1+ph+1),
-                                          (80, 130, 200), 1, cv2.LINE_AA)
-                        except Exception:
-                            pass
+                    self._composite_pip(canvas, pip_frame)
                     cv2.imshow(self.WINDOW_NAME, canvas)
                     key = cv2.waitKey(1) & 0xFF
-                    self._handle_key_start_screen(key)
+                    if self._handle_start_key(key):
+                        break
+                    if cv2.getWindowProperty(self.WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
+                        break
                     continue
 
-                # ── Active gameplay ───────────────────────────────────────────
-                if self.game is None:
+                # ── Gameplay ──────────────────────────────────────────────────
+                if self.engine is None:
                     self._new_game()
 
-                assert self.game is not None
+                self.engine.update(cursor, dt)
 
-                # Update game state
-                self.game.update(cursor, dt)
-
-                # ── EMG integration point (disabled) ──────────────────────────
+                # ── EMG integration hook (disabled) ───────────────────────────
                 # if self.emg and self.emg.is_connected:
                 #     activation = self.emg.get_muscle_activation()
-                #     # TODO: map activation to game mechanic (e.g. speed boost)
-                #     pass
+                #     # TODO: map to game mechanic (speed boost, gate unlock, etc.)
 
-                # ── Auto-save metrics on session end ──────────────────────────
                 self._maybe_save_metrics()
 
-                # ── Render ────────────────────────────────────────────────────
-                canvas = self.renderer.draw(self.game, dt, pip_frame)
+                canvas = self.renderer.draw(self.engine, dt, pip_frame)
                 cv2.imshow(self.WINDOW_NAME, canvas)
 
-                # ── Keyboard input ────────────────────────────────────────────
                 key = cv2.waitKey(1) & 0xFF
-                should_quit = self._handle_key_game(key)
-                if should_quit:
+                if self._handle_game_key(key):
                     break
-
-                # ── Window closed by user (X button) ─────────────────────────
-                if cv2.getWindowProperty(
-                    self.WINDOW_NAME, cv2.WND_PROP_VISIBLE
-                ) < 1:
+                if cv2.getWindowProperty(self.WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
                     break
 
         finally:
@@ -255,54 +207,42 @@ class RehabGame:
     #  Keyboard handlers
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _handle_key_start_screen(self, key: int) -> None:
-        if key == 27:   # ESC
-            self._quit()
-        elif key in (ord('1'), ord('2'), ord('3')):
-            self.difficulty = int(chr(key))
-            log.info(f"Difficulty selected: {config.DIFFICULTIES[self.difficulty].name}")
-        elif key in (13, 32):   # ENTER or SPACE
-            self._on_start_screen = False
-            self._setup_tracker()
-            self._new_game()
-
-    def _handle_key_game(self, key: int) -> bool:
-        """Returns True if the game should quit."""
-        if key == 27:   # ESC → quit
+    def _handle_start_key(self, key: int) -> bool:
+        """Returns True if the application should quit."""
+        if key == 27:
             return True
-
-        elif key == ord('r') or key == ord('R'):
-            # Restart same level
+        if key in (ord('1'), ord('2'), ord('3')):
+            self.difficulty = int(chr(key))
+        elif key in (13, 32):   # ENTER or SPACE
+            self._start_screen = False
+            self._build_tracker()
             self._new_game()
+        return False
 
-        elif key == ord('n') or key == ord('N'):
-            # Next level in the same difficulty
+    def _handle_game_key(self, key: int) -> bool:
+        """Returns True if the application should quit."""
+        if key == 27:
+            return True
+        elif key in (ord('r'), ord('R')):
+            self._new_game()
+        elif key in (ord('n'), ord('N')):
             total = self.maze_gen.level_count(self.difficulty)
             self.level_index = (self.level_index + 1) % total
             self._new_game()
-            log.info(f"Next level: index={self.level_index}")
-
-        elif key == ord('p') or key == ord('P'):
-            if self.game:
-                self.game.toggle_pause()
-
+        elif key in (ord('p'), ord('P')):
+            if self.engine:
+                self.engine.toggle_pause()
         elif key in (ord('1'), ord('2'), ord('3')):
-            new_diff = int(chr(key))
-            if new_diff != self.difficulty:
-                self.difficulty  = new_diff
+            new_d = int(chr(key))
+            if new_d != self.difficulty:
+                self.difficulty  = new_d
                 self.level_index = 0
-                self._setup_tracker()   # update smoothing for new difficulty
+                self._build_tracker()
                 self._new_game()
-                log.info(f"Switched difficulty: {config.DIFFICULTIES[self.difficulty].name}")
-
-        elif key == ord('c') or key == ord('C'):
-            # Toggle camera PiP
+        elif key in (ord('c'), ord('C')):
             config.CAMERA_PIP_ENABLED = not config.CAMERA_PIP_ENABLED
-            log.info(f"Camera PiP: {config.CAMERA_PIP_ENABLED}")
-
-        elif key == 13 or key == 32:   # ENTER / SPACE — go back to start screen
-            self._on_start_screen = True
-
+        elif key in (13, 32):
+            self._start_screen = True
         return False
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -310,63 +250,67 @@ class RehabGame:
     # ─────────────────────────────────────────────────────────────────────────
 
     def _maybe_save_metrics(self) -> None:
-        """Save session CSV exactly once when the game ends."""
-        if self.game is None or not self.game.is_finished:
+        """Save session CSV exactly once after the session ends."""
+        if not (self.engine and self.engine.is_finished):
             return
-        if self.game.final_metrics is None:
-            return
-
-        # Use a flag to prevent saving every frame after session ends
-        if getattr(self.game, "_metrics_saved", False):
+        if self.engine._metrics_saved:
             return
 
-        diff_cfg = config.DIFFICULTIES[self.difficulty]
-        won = self.game.state == State.WIN
+        won      = self.engine.state == GameState.WIN
+        should   = (won and config.SAVE_METRICS_ON_WIN) or \
+                   (not won and config.SAVE_METRICS_ON_TIMEOUT)
 
-        should_save = (
-            (won and config.SAVE_METRICS_ON_WIN) or
-            (not won and config.SAVE_METRICS_ON_TIMEOUT)
-        )
-
-        if should_save and self.game.metrics:
-            path = self.game.metrics.save_csv(
-                self.game.final_metrics,
+        if should and self.engine.metrics and self.engine.final_metrics:
+            diff_cfg = config.DIFFICULTIES[self.difficulty]
+            self.engine.metrics.save_csv(
+                self.engine.final_metrics,
                 difficulty=diff_cfg.name,
-                level_name=self.game.level.name,
+                level_name=self.engine.level.name,
             )
-            if path:
-                log.info(f"Session saved → {path}")
+        self.engine._metrics_saved = True
 
-        self.game._metrics_saved = True   # type: ignore[attr-defined]
+    def _composite_pip(
+        self,
+        canvas:    np.ndarray,
+        pip_frame: np.ndarray | None,
+    ) -> None:
+        """Blit a PiP thumbnail onto the start screen canvas."""
+        if pip_frame is None or not config.CAMERA_PIP_ENABLED:
+            return
+        pw, ph = config.PIP_WIDTH, config.PIP_HEIGHT
+        try:
+            thumb = cv2.resize(pip_frame, (pw, ph))
+            x1    = config.CANVAS_WIDTH  - pw - 10
+            y1    = 10
+            canvas[y1:y1 + ph, x1:x1 + pw] = thumb
+            cv2.rectangle(canvas, (x1 - 1, y1 - 1), (x1 + pw + 1, y1 + ph + 1),
+                          (80, 130, 200), 1, cv2.LINE_AA)
+        except Exception:
+            pass
 
-    def _run_no_camera(self) -> None:
-        """Fallback mode: show a message if the camera can't be opened."""
-        log.warning("Running in NO-CAMERA mode — showing error screen.")
-        canvas = np.zeros((config.CANVAS_HEIGHT, config.CANVAS_WIDTH, 3), dtype=np.uint8)
-        cv2.putText(canvas, "ERROR: No camera detected",
-                    (config.CANVAS_WIDTH//2 - 220, config.CANVAS_HEIGHT//2 - 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (60, 60, 220), 2, cv2.LINE_AA)
-        cv2.putText(canvas, "Connect a webcam and restart the game.",
-                    (config.CANVAS_WIDTH//2 - 270, config.CANVAS_HEIGHT//2 + 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.65, (180, 180, 220), 1, cv2.LINE_AA)
-        cv2.putText(canvas, "Press any key to exit.",
-                    (config.CANVAS_WIDTH//2 - 120, config.CANVAS_HEIGHT//2 + 60),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (140, 140, 180), 1, cv2.LINE_AA)
+    def _no_camera_screen(self) -> None:
+        W, H   = config.CANVAS_WIDTH, config.CANVAS_HEIGHT
+        canvas = np.zeros((H, W, 3), dtype=np.uint8)
+        msgs   = [
+            ("ERROR: No camera detected",              0.9, (60, 60, 220), -20),
+            ("Connect a webcam and restart the game.", 0.65, (180, 180, 220), 20),
+            ("Press any key to exit.",                 0.55, (140, 140, 180), 60),
+        ]
+        for text, scale, color, dy in msgs:
+            ts = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, 2)[0]
+            cv2.putText(canvas, text, (W // 2 - ts[0] // 2, H // 2 + dy),
+                        cv2.FONT_HERSHEY_SIMPLEX, scale, color, 2, cv2.LINE_AA)
         cv2.imshow(self.WINDOW_NAME, canvas)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-    def _quit(self) -> None:
-        self._cleanup()
-        sys.exit(0)
-
     def _cleanup(self) -> None:
         log.info("Cleaning up resources.")
-        if self.cap is not None:
+        if self.cap:
             self.cap.release()
-        if self.tracker is not None:
+        if self.tracker:
             self.tracker.close()
-        # if self.emg is not None:
+        # if self.emg:
         #     self.emg.disconnect()
         cv2.destroyAllWindows()
 
@@ -376,5 +320,4 @@ class RehabGame:
 # ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    app = RehabGame()
-    app.run()
+    RehabGame().run()

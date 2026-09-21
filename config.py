@@ -130,7 +130,7 @@ DEFAULT_DIFFICULTY: int = 1
 #  Metrics / Session Logging
 # ─────────────────────────────────────────────
 
-METRICS_SAVE_DIR: str = "sessions"   # Directory for per-session CSV files
+METRICS_SAVE_DIR: str = "data/sessions"  # Directory for per-session CSV files
 SAVE_METRICS_ON_TIMEOUT: bool = True # Save CSV even if the player ran out of time
 SAVE_METRICS_ON_WIN: bool = True     # Save CSV on successful completion
 
