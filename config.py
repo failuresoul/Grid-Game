@@ -83,10 +83,13 @@ SMOOTHING_ALGORITHM: str = "ONE_EURO"
 
 # ── 1-Euro Filter Parameters (Speed-adaptive low-pass filter) ─────────────────
 # Minimum cutoff frequency (Hz): lower values eliminate jitter when stationary.
-ONE_EURO_MIN_CUTOFF: float = 1.0
+# NOTE: Because coordinates are in pixel space (0–1000 px), values must be much
+# higher than typical normalized-coordinate defaults (which would be ~1.0).
+ONE_EURO_MIN_CUTOFF: float = 3.0
 
 # Speed coefficient (beta): higher values reduce latency during fast movements.
-ONE_EURO_BETA: float = 0.007
+# With pixel-space coords a beta of ~3.0 gives responsive, smooth tracking.
+ONE_EURO_BETA: float = 3.0
 
 # Cutoff frequency (Hz) for the derivative filter.
 ONE_EURO_D_CUTOFF: float = 1.0
@@ -96,7 +99,7 @@ ONE_EURO_D_CUTOFF: float = 1.0
 #   Lower = more smoothing  -> good for severe tremor patients.
 #   Higher = more responsive -> appropriate for lighter impairment.
 #   Overridden per difficulty in DifficultyConfig.cursor_smoothing.
-CURSOR_SMOOTHING: float = 0.30
+CURSOR_SMOOTHING: float = 0.65
 
 # MediaPipe landmark index used as the cursor control point:
 #   8  = index finger tip   (default)
@@ -217,7 +220,7 @@ EASY: DifficultyConfig = DifficultyConfig(
     corridor_min_width=120,
     num_obstacles=3,
     player_radius=16,
-    cursor_smoothing=0.22,       # Maximum smoothing -- supports severe tremor
+    cursor_smoothing=0.55,       # Moderate smoothing -- responsive but tremor-dampened
     time_limit_sec=0,            # No time pressure
     show_path_hint=True,         # Ghost line guides the patient
     hint_color=(60, 180, 60),
@@ -228,7 +231,7 @@ MEDIUM: DifficultyConfig = DifficultyConfig(
     corridor_min_width=70,
     num_obstacles=7,
     player_radius=14,
-    cursor_smoothing=0.30,
+    cursor_smoothing=0.65,
     time_limit_sec=0,
     show_path_hint=False,
     hint_color=(60, 180, 60),
@@ -239,7 +242,7 @@ HARD: DifficultyConfig = DifficultyConfig(
     corridor_min_width=40,
     num_obstacles=13,
     player_radius=12,
-    cursor_smoothing=0.40,       # Minimal smoothing -- full tremor challenge
+    cursor_smoothing=0.75,       # Least smoothing -- near real-time hand tracking
     time_limit_sec=0,
     show_path_hint=False,
     hint_color=(60, 180, 60),

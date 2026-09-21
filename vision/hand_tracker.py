@@ -231,16 +231,16 @@ class HandTracker:
     #  Core Tracking Pipeline
     # -------------------------------------------------------------------------
 
-    def process(self, bgr_frame: np.ndarray) -> Optional[Tuple[float, float]]:
+    def process(self, bgr_frame: np.ndarray, dt: float = 1.0 / 30.0) -> Optional[Tuple[float, float]]:
         """
         Backward-compatible entry point: returns smoothed game coordinates
         Tuple[float, float] or None if no hand is detected.
         Safe against empty frames or dropped hands.
         """
-        result = self.process_frame(bgr_frame)
+        result = self.process_frame(bgr_frame, dt=dt)
         return result.smoothed_game_coords
 
-    def process_frame(self, bgr_frame: np.ndarray) -> HandTrackingResult:
+    def process_frame(self, bgr_frame: np.ndarray, dt: float = 1.0 / 30.0) -> HandTrackingResult:
         """
         Execute the full tracking pipeline on a video frame:
             Camera
@@ -310,7 +310,8 @@ class HandTracker:
         self.raw_coords = (raw_gx, raw_gy)
 
         # 7. Coordinate smoothing stage (OneEuroFilter2D / EMA)
-        sx, sy = self.smoother.update(raw_gx, raw_gy, dt=0.033)
+        safe_dt = max(0.001, float(dt))
+        sx, sy = self.smoother.update(raw_gx, raw_gy, dt=safe_dt)
         smoothed_gx = float(np.clip(sx, 0.0, float(self.canvas_w - 1)))
         smoothed_gy = float(np.clip(sy, 0.0, float(self.canvas_h - 1)))
         self.smoothed_coords = (smoothed_gx, smoothed_gy)

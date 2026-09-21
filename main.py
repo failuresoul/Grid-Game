@@ -73,6 +73,7 @@ class RehabGame:
 
     def __init__(self) -> None:
         self.difficulty:   int  = config.DEFAULT_DIFFICULTY
+        self.level_index:  int  = 0          # 0-based index within the difficulty pool
         # ── Application State Machine ─────────────────────────────────────────
         self.app_state: GameState = GameState.MENU
 
@@ -278,7 +279,7 @@ class RehabGame:
                 cursor    = None
                 pip_frame = None
                 if self.tracker and cam_frame is not None:
-                    cursor    = self.tracker.process(cam_frame)
+                    cursor    = self.tracker.process(cam_frame, dt=max(0.001, dt))
                     pip_frame = self.tracker.annotated_frame
 
                 is_mouse = False
