@@ -57,9 +57,21 @@ def resolve_circle_rect(
     dist = math.sqrt(dist_sq)
 
     if dist < 1e-6:
-        # Circle centre is exactly on (or inside) the wall surface.
-        # Degenerate case: push straight up as a safe default.
-        return px, py - r, True
+        # Circle centre is inside the rectangle. Find the closest edge to push out.
+        d_left   = px - wx
+        d_right  = (wx + ww) - px
+        d_top    = py - wy
+        d_bottom = (wy + wh) - py
+        min_d = min(d_left, d_right, d_top, d_bottom)
+        push_bias = 0.5
+        if min_d == d_left:
+            return wx - r - push_bias, py, True
+        elif min_d == d_right:
+            return wx + ww + r + push_bias, py, True
+        elif min_d == d_top:
+            return px, wy - r - push_bias, True
+        else:
+            return px, wy + wh + r + push_bias, True
 
     # Push the circle out along the collision normal by the penetration depth
     penetration = r - dist

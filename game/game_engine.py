@@ -85,19 +85,19 @@ class GameEngine:
     #  Main update — called every frame by main.py
     # ─────────────────────────────────────────────────────────────────────────
 
-    def update(self, cursor: Optional[Tuple[int, int]], dt: float) -> None:
+    def update(self, cursor: Optional[Tuple[float, float]], dt: float) -> None:
         """
         Advance the engine by one frame.
 
         Args:
-            cursor: Smoothed (cx, cy) from HandTracker, or None if no hand.
+            cursor: Continuous smoothed (cx, cy) in float coords, or None if no input.
             dt:     Seconds elapsed since the previous frame.
         """
         if self.state in (GameState.PAUSED, GameState.WIN, GameState.TIMEOUT):
             return
 
         if cursor is None:
-            return   # freeze player when hand is not visible
+            return   # freeze player when hand/mouse input is not active
 
         tx, ty = float(cursor[0]), float(cursor[1])
 
@@ -109,8 +109,9 @@ class GameEngine:
 
         # ── RUNNING: move, record, check win/timeout ──────────────────────────
         if self.state == GameState.RUNNING:
-            self.player.move_to_cursor(tx, ty, self.level.walls)
-            self.player.record_trail()
+            moved = self.player.move_to_cursor(tx, ty, self.level.walls)
+            if moved:
+                self.player.record_trail()
 
             if self.metrics:
                 self.metrics.record(self.player.px, self.player.py, dt)
@@ -168,6 +169,10 @@ class GameEngine:
     @property
     def trail(self):
         return self.player.trail
+
+    @property
+    def trajectory(self):
+        return self.player.trajectory
 
     @property
     def wall_hit_count(self) -> int:

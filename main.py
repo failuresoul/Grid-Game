@@ -80,6 +80,11 @@ class RehabGame:
         self.renderer: Renderer                = Renderer()
         self.engine:   GameEngine       | None = None
 
+        # ── Mouse fallback for development/testing ───────────────────────────
+        self.mouse_fallback_enabled: bool = config.MOUSE_FALLBACK_ENABLED
+        self._mouse_pos: Optional[Tuple[float, float]] = None
+        self._using_mouse: bool = False
+
         # ── EMG (disabled) ────────────────────────────────────────────────────
         self.emg = None
         # if config.EMG_ENABLED:
@@ -106,7 +111,7 @@ class RehabGame:
             return False
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH,  config.CAMERA_WIDTH)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, config.CAMERA_HEIGHT)
-        self.cap.set(cv2.CAP_PROP_FPS,          config.TARGET_FPS)
+        self.cap.set(cv2.CAP_PROP_FPS,          config.FPS)
         log.info(f"Camera opened (index={config.CAMERA_INDEX})")
         return True
 
@@ -131,6 +136,11 @@ class RehabGame:
             self.tracker.reset_smoothing()
         log.info(f"New game: {diff_cfg.name}  |  {level.name}")
 
+    def _on_mouse(self, event: int, x: int, y: int, flags: int, param: any) -> None:
+        """Track mouse position for development / testing fallback."""
+        if event in (cv2.EVENT_MOUSEMOVE, cv2.EVENT_LBUTTONDOWN):
+            self._mouse_pos = (float(x), float(y))
+
     # ─────────────────────────────────────────────────────────────────────────
     #  Main loop
     # ─────────────────────────────────────────────────────────────────────────
@@ -138,33 +148,49 @@ class RehabGame:
     def run(self) -> None:
         log.info("=== Rehab Maze Game starting ===")
 
-        if not self._open_camera():
-            self._no_camera_screen()
-            return
+        has_camera = self._open_camera()
+        if not has_camera:
+            if self.mouse_fallback_enabled:
+                log.warning("No camera detected, but MOUSE_FALLBACK_ENABLED is True. Running in mouse dev mode.")
+            else:
+                self._no_camera_screen()
+                return
 
-        self._build_tracker()
+        if has_camera:
+            self._build_tracker()
+
         cv2.namedWindow(self.WINDOW_NAME, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(self.WINDOW_NAME, config.CANVAS_WIDTH, config.CANVAS_HEIGHT)
+        cv2.setMouseCallback(self.WINDOW_NAME, self._on_mouse)
 
         prev_time = time.perf_counter()
 
         try:
             while True:
                 now = time.perf_counter()
-                dt  = min(now - prev_time, 0.1)
+                dt  = min(now - prev_time, config.FRAME_DT_MAX)
                 prev_time = now
 
-                ok, cam_frame = self.cap.read()
-                if not ok:
-                    time.sleep(0.01)
-                    continue
+                cam_frame = None
+                if self.cap and self.cap.isOpened():
+                    ok, frame = self.cap.read()
+                    if ok:
+                        cam_frame = frame
+                    else:
+                        time.sleep(0.01)
 
-                # ── Hand tracking ─────────────────────────────────────────────
+                # ── Hand tracking (primary) + Mouse fallback ──────────────────
                 cursor    = None
                 pip_frame = None
-                if self.tracker:
+                if self.tracker and cam_frame is not None:
                     cursor    = self.tracker.process(cam_frame)
                     pip_frame = self.tracker.annotated_frame
+
+                is_mouse = False
+                if cursor is None and self.mouse_fallback_enabled and self._mouse_pos is not None:
+                    cursor = self._mouse_pos
+                    is_mouse = True
+                self._using_mouse = is_mouse
 
                 # ── Start screen ──────────────────────────────────────────────
                 if self._start_screen:
@@ -191,7 +217,9 @@ class RehabGame:
 
                 self._maybe_save_metrics()
 
-                canvas = self.renderer.draw(self.engine, dt, pip_frame)
+                canvas = self.renderer.draw(
+                    self.engine, dt, pip_frame, is_mouse_fallback=self._using_mouse
+                )
                 cv2.imshow(self.WINDOW_NAME, canvas)
 
                 key = cv2.waitKey(1) & 0xFF
@@ -213,9 +241,13 @@ class RehabGame:
             return True
         if key in (ord('1'), ord('2'), ord('3')):
             self.difficulty = int(chr(key))
+        elif key in (ord('m'), ord('M')):
+            self.mouse_fallback_enabled = not self.mouse_fallback_enabled
+            log.info(f"Mouse fallback toggled: {self.mouse_fallback_enabled}")
         elif key in (13, 32):   # ENTER or SPACE
             self._start_screen = False
-            self._build_tracker()
+            if self.cap and self.cap.isOpened():
+                self._build_tracker()
             self._new_game()
         return False
 
@@ -232,18 +264,23 @@ class RehabGame:
         elif key in (ord('p'), ord('P')):
             if self.engine:
                 self.engine.toggle_pause()
+        elif key in (ord('m'), ord('M')):
+            self.mouse_fallback_enabled = not self.mouse_fallback_enabled
+            log.info(f"Mouse fallback toggled: {self.mouse_fallback_enabled}")
         elif key in (ord('1'), ord('2'), ord('3')):
             new_d = int(chr(key))
             if new_d != self.difficulty:
                 self.difficulty  = new_d
                 self.level_index = 0
-                self._build_tracker()
+                if self.cap and self.cap.isOpened():
+                    self._build_tracker()
                 self._new_game()
         elif key in (ord('c'), ord('C')):
             config.CAMERA_PIP_ENABLED = not config.CAMERA_PIP_ENABLED
         elif key in (13, 32):
             self._start_screen = True
         return False
+
 
     # ─────────────────────────────────────────────────────────────────────────
     #  Helpers

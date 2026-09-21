@@ -76,17 +76,19 @@ class Renderer:
 
     def draw(
         self,
-        engine:    "GameEngine",
-        dt:        float,
-        pip_frame: Optional[np.ndarray] = None,
+        engine:            "GameEngine",
+        dt:                float,
+        pip_frame:         Optional[np.ndarray] = None,
+        is_mouse_fallback: bool = False,
     ) -> np.ndarray:
         """
         Render a complete gameplay frame.
 
         Args:
-            engine:    Current GameEngine.
-            dt:        Seconds since the last frame (drives animations).
-            pip_frame: Optional annotated webcam frame for PiP thumbnail.
+            engine:            Current GameEngine.
+            dt:                Seconds since the last frame (drives animations).
+            pip_frame:         Optional annotated webcam frame for PiP thumbnail.
+            is_mouse_fallback: True if mouse cursor fallback is actively controlling player.
 
         Returns:
             BGR ndarray (H × W × 3) ready for cv2.imshow().
@@ -104,7 +106,7 @@ class Renderer:
         self._draw_trail(canvas, engine.trail)
         self._draw_start_end(canvas, level)
         self._draw_player(canvas, engine)
-        self._draw_hud(canvas, engine)
+        self._draw_hud(canvas, engine, is_mouse_fallback)
 
         # State overlays
         state = engine.state
@@ -165,7 +167,9 @@ class Renderer:
             intensity = int(80 + 120 * alpha)
             color     = (intensity, intensity + 40, 255)
             thickness = max(1, int(2 * alpha))
-            cv2.line(canvas, trail[i - 1], trail[i], color, thickness, cv2.LINE_AA)
+            p1 = (int(round(trail[i - 1][0])), int(round(trail[i - 1][1])))
+            p2 = (int(round(trail[i][0])), int(round(trail[i][1])))
+            cv2.line(canvas, p1, p2, color, thickness, cv2.LINE_AA)
 
     def _draw_start_end(self, canvas: np.ndarray, level) -> None:
         # Start zone
@@ -205,7 +209,7 @@ class Renderer:
         from game.game_engine import GameState
 
         speed = engine.metrics.live_speed() if engine.metrics else 0.0
-        speed_norm = min(speed / 300.0, 1.0)
+        speed_norm = min(speed / config.PLAYER_SPEED_MAX, 1.0)
         slow  = np.array(config.PLAYER_COLOR_SLOW, dtype=float)
         fast  = np.array(config.PLAYER_COLOR_FAST, dtype=float)
         color = tuple(int(c) for c in (slow + (fast - slow) * speed_norm))
@@ -213,18 +217,28 @@ class Renderer:
         pos = engine.player_pos
         if engine.state == GameState.WAITING:
             r = engine.radius + int(3 * math.sin(self._t * 4))
-            glow_circle(canvas, pos, r, color, glow_layers=2)
+            glow_circle(canvas, pos, r, color, glow_layers=max(1, config.PLAYER_GLOW_LAYERS - 1))
         else:
-            glow_circle(canvas, pos, engine.radius, color, glow_layers=3)
+            glow_circle(canvas, pos, engine.radius, color, glow_layers=config.PLAYER_GLOW_LAYERS)
 
-    def _draw_hud(self, canvas: np.ndarray, engine: "GameEngine") -> None:
+    def _draw_hud(
+        self,
+        canvas: np.ndarray,
+        engine: "GameEngine",
+        is_mouse_fallback: bool = False,
+    ) -> None:
         W, H = self.W, self.H
         y    = 24
 
-        draw_text(canvas, f"DIFFICULTY: {engine.difficulty_cfg.name.upper()}",
-                  (12, y), font_scale=0.55, color=config.HUD_LABEL_COLOR)
+        diff_str = f"DIFFICULTY: {engine.difficulty_cfg.name.upper()}"
+        draw_text(canvas, diff_str, (12, y), font_scale=0.55, color=config.HUD_LABEL_COLOR)
         draw_text(canvas, engine.level.name,
                   (12, y + 26), font_scale=0.45, color=config.HUD_LABEL_COLOR)
+
+        # Development mouse fallback indicator
+        if is_mouse_fallback:
+            draw_text(canvas, "[DEV MOUSE ACTIVE]", (230, y),
+                      font_scale=0.45, color=(0, 220, 255), thickness=1)
 
         # Elapsed time (right-aligned)
         t        = engine.elapsed_time
@@ -240,10 +254,11 @@ class Renderer:
         draw_text(canvas, f"Wall hits: {engine.wall_hit_count}",
                   (12, H - 16), font_scale=0.45, color=config.HUD_LABEL_COLOR)
 
-        hint = "R=Restart  P=Pause  ESC=Quit"
+        hint = "R=Restart  P=Pause  M=Mouse  ESC=Quit"
         hs   = cv2.getTextSize(hint, cv2.FONT_HERSHEY_SIMPLEX, 0.4, 1)[0]
         draw_text(canvas, hint, (W - hs[0] - 8, H - 10),
                   font_scale=0.4, color=(80, 100, 130))
+
 
     def _draw_pip(self, canvas: np.ndarray, cam_frame: np.ndarray) -> None:
         pw, ph = config.PIP_WIDTH, config.PIP_HEIGHT

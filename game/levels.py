@@ -5,11 +5,8 @@ Defines the Level dataclass and all handcrafted level layouts.
 Levels are NOT grid-based: the player moves freely in 2-D pixel space.
 Obstacles are axis-aligned rectangles (x, y, w, h).
 
-Importing this module has no side-effects; level lists are built lazily
-via the factory functions _easy_levels(), _medium_levels(), _hard_levels(),
-which each take (W, H) canvas dimensions as arguments.
-
-No project imports beyond standard library.
+All geometry constants (zone radii, wall thickness) are read from config
+so they can be tuned without touching level logic.
 """
 
 from __future__ import annotations
@@ -17,7 +14,9 @@ import random
 from dataclasses import dataclass, field
 from typing import List, Tuple
 
-# Axis-aligned rectangle: (left, top, width, height) — all in pixels
+import config
+
+# Axis-aligned rectangle: (left, top, width, height) -- all in pixels
 Rect = Tuple[int, int, int, int]
 
 
@@ -37,8 +36,8 @@ class Level:
     walls:   List[Rect]
     start:   Tuple[int, int]
     end:     Tuple[int, int]
-    start_r: int = 24
-    end_r:   int = 24
+    start_r: int = config.START_ZONE_RADIUS  # read from config, default 24
+    end_r:   int = config.END_ZONE_RADIUS    # read from config, default 24
     name:    str = ""
 
 
@@ -96,7 +95,7 @@ def medium_levels(W: int, H: int) -> List[Level]:
     Medium: Multiple turns and bends.  Corridors ≥ 70 px.
     """
     margin = 60
-    t = 22        # wall thickness
+    t = config.WALL_THICKNESS  # wall thickness from config
     levels: List[Level] = []
 
     # ── Medium-1: Zigzag ──────────────────────────────────────────────────────
@@ -151,7 +150,7 @@ def hard_levels(W: int, H: int) -> List[Level]:
     Hard: Many obstacles, narrow passages (≥ 40 px), dead ends.
     """
     margin = 50
-    t = 20
+    t = config.WALL_THICKNESS  # wall thickness from config
     levels: List[Level] = []
 
     # ── Hard-1: Dense Zigzag with dead-end stubs ──────────────────────────────

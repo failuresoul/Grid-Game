@@ -91,8 +91,8 @@ class HandTracker:
         smoothing:            float = config.CURSOR_SMOOTHING,
         landmark_id:          int   = config.CURSOR_LANDMARK,
         max_hands:            int   = 1,
-        detection_confidence: float = 0.70,
-        tracking_confidence:  float = 0.60,
+        detection_confidence: float = config.HAND_DETECTION_CONFIDENCE,
+        tracking_confidence:  float = config.HAND_TRACKING_CONFIDENCE,
     ) -> None:
         self.canvas_w    = canvas_w
         self.canvas_h    = canvas_h
@@ -124,15 +124,22 @@ class HandTracker:
     #  Public API
     # -------------------------------------------------------------------------
 
-    def process(self, bgr_frame: np.ndarray) -> Optional[Tuple[int, int]]:
+    def process(self, bgr_frame: np.ndarray) -> Optional[Tuple[float, float]]:
         """
-        Detect hand in bgr_frame and return a smoothed canvas cursor.
+        Detect hand in bgr_frame and return a smoothed, continuous canvas cursor.
+
+        Mapping Pipeline:
+            1. Camera hand position -> MediaPipe normalized landmark (nx, ny) in [0, 1]
+            2. Horizontal mirror: nx_mirrored = 1.0 - nx (so right-hand movement moves right)
+            3. Direct mapping to game canvas: (x_game, y_game) = (nx_mirrored * W, ny * H)
+            4. Exponential Moving Average (EMA) smoothing for tremor reduction
+            5. Return continuous 2D float coordinates (no grid or cell snapping)
 
         Args:
             bgr_frame: Raw BGR frame from cv2.VideoCapture.
 
         Returns:
-            (cx, cy) in canvas pixels, or None if no hand is detected.
+            (cx, cy) continuous float coordinates in game space, or None if no hand detected.
         """
         self._frame_ts_ms += 33   # ~30 fps; must be monotonically increasing
 
@@ -150,17 +157,15 @@ class HandTracker:
         self._draw_skeleton(annotated, landmarks)
         self.annotated_frame = annotated
 
-        # Extract the chosen landmark position -> canvas pixels
+        # Extract landmark normalized coordinates [0, 1] -> canvas game space
         raw_x, raw_y = self._landmark_to_canvas(landmarks)
 
-        # Mirror X: right-hand movement should move cursor rightward
-        raw_x = self.canvas_w - raw_x
-
-        # EMA smoothing
+        # EMA smoothing across frames for continuous, smooth movement
         sx, sy = self._ema.update(raw_x, raw_y)
 
-        cx = int(np.clip(sx, 0, self.canvas_w  - 1))
-        cy = int(np.clip(sy, 0, self.canvas_h - 1))
+        # Clamp continuously to canvas boundaries
+        cx = float(np.clip(sx, 0.0, float(self.canvas_w - 1)))
+        cy = float(np.clip(sy, 0.0, float(self.canvas_h - 1)))
         return cx, cy
 
     def reset_smoothing(self) -> None:
@@ -177,7 +182,10 @@ class HandTracker:
     # -------------------------------------------------------------------------
 
     def _landmark_to_canvas(self, landmarks: list) -> Tuple[float, float]:
-        """Convert the chosen MediaPipe landmark to canvas-pixel coordinates."""
+        """
+        Convert normalized MediaPipe landmark [0, 1] to game-canvas coordinates.
+        Applies horizontal mirroring so physical hand movements map naturally.
+        """
         if self.landmark_id in _PALM_LANDMARKS:
             xs = [landmarks[i].x for i in _PALM_LANDMARKS]
             ys = [landmarks[i].y for i in _PALM_LANDMARKS]
@@ -185,8 +193,15 @@ class HandTracker:
             ny = float(np.mean(ys))
         else:
             lm = landmarks[self.landmark_id]
-            nx, ny = lm.x, lm.y
-        return nx * self.canvas_w, ny * self.canvas_h
+            nx, ny = float(lm.x), float(lm.y)
+
+        # Mirror X: camera mirror so user hand moving right moves right in game
+        mirrored_nx = 1.0 - nx
+
+        # Direct linear mapping to game-space continuous 2D coordinates
+        x_game = mirrored_nx * float(self.canvas_w)
+        y_game = ny * float(self.canvas_h)
+        return x_game, y_game
 
     def _draw_skeleton(self, bgr_img: np.ndarray, landmarks: list) -> None:
         """Draw the hand skeleton onto a BGR ndarray using OpenCV."""
