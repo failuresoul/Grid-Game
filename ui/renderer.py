@@ -324,7 +324,7 @@ class Renderer:
         draw_text(canvas, dist_str, (W - 200, y + 30),
                   font_scale=0.45, color=config.HUD_LABEL_COLOR)
 
-        draw_text(canvas, f"Wall hits: {engine.wall_hit_count}",
+        draw_text(canvas, f"Traveled: {int(engine.actual_distance)} px  |  Wall hits: {engine.wall_hit_count}",
                   (12, H - 16), font_scale=0.45, color=config.HUD_LABEL_COLOR)
 
         hint = "R=Restart  P=Pause  L=Landmark  D=Debug  M=Mouse  ESC=Quit"
@@ -340,7 +340,7 @@ class Renderer:
         algo_name: str,
     ) -> None:
         """Render real-time telemetry overlay showing Raw vs. Smoothed coordinates and optimal path."""
-        bx, by, bw, bh = 12, 82, 245, 110
+        bx, by, bw, bh = 12, 82, 245, 126
         overlay = canvas.copy()
         cv2.rectangle(overlay, (bx, by), (bx + bw, by + bh), (15, 20, 30), -1)
         cv2.addWeighted(overlay, 0.78, canvas, 0.22, 0, canvas)
@@ -357,6 +357,7 @@ class Renderer:
             jit_str = "JITTER: N/A"
 
         smooth_str = f"SMOOTH: X={px:5.1f}  Y={py:5.1f}"
+        act_dist_str = f"ACTUAL: D={engine.actual_distance:5.1f} px"
         filter_str = f"FILTER: {algo_name or 'ONE_EURO'}"
 
         pts = getattr(engine.level, "optimal_waypoints", [])
@@ -369,11 +370,13 @@ class Renderer:
                   font_scale=0.36, color=(60, 220, 255))
         draw_text(canvas, smooth_str, (bx + 8, by + 50),
                   font_scale=0.36, color=(80, 255, 120))
-        draw_text(canvas, jit_str, (bx + 8, by + 66),
+        draw_text(canvas, act_dist_str, (bx + 8, by + 66),
+                  font_scale=0.36, color=(255, 220, 100))
+        draw_text(canvas, jit_str, (bx + 8, by + 82),
                   font_scale=0.36, color=(240, 240, 255))
-        draw_text(canvas, path_str, (bx + 8, by + 82),
+        draw_text(canvas, path_str, (bx + 8, by + 98),
                   font_scale=0.36, color=(0, 240, 200))
-        draw_text(canvas, filter_str, (bx + 8, by + 98),
+        draw_text(canvas, filter_str, (bx + 8, by + 114),
                   font_scale=0.33, color=(160, 160, 220))
 
         # Canvas visual marker: draw raw crosshair and connecting line to smoothed player

@@ -169,12 +169,99 @@ class GameEngine:
         return self.player.position
 
     @property
+    def minimum_distance(self) -> float:
+        """Minimum collision-free path distance from START to END in pixels."""
+        if hasattr(self.level, "minimum_path_distance") and self.level.minimum_path_distance is not None:
+            return float(self.level.minimum_path_distance)
+        return float(math.dist(self.level.start, self.level.end))
+
+    @property
+    def actual_distance(self) -> float:
+        """Total actual smoothed hand/player movement distance in pixels/game units."""
+        return self.player.actual_distance
+
+    @property
+    def path_efficiency(self) -> float:
+        """Path efficiency percentage (minimum_distance / actual_distance * 100)."""
+        from metrics.distance import path_efficiency
+        return path_efficiency(actual=self.actual_distance, minimum=self.minimum_distance)
+
+    @property
+    def trajectory_accuracy(self) -> float:
+        """Trajectory accuracy percentage [0.0%, 100.0%] along intended route."""
+        if self.metrics is not None:
+            return self.metrics.trajectory_accuracy
+        from metrics.accuracy import trajectory_accuracy_percentage
+        traj = self.player.full_trajectory
+        if len(traj) < 2:
+            return 0.0
+        xs = [p[0] for p in traj]
+        ys = [p[1] for p in traj]
+        wps = getattr(self.level, "optimal_waypoints", [self.level.start, self.level.end])
+        return trajectory_accuracy_percentage(xs, ys, wps)
+
+    @property
+    def mean_path_deviation(self) -> float:
+        """Mean orthogonal path deviation from intended route in pixels."""
+        if self.metrics is not None:
+            return self.metrics.mean_path_deviation
+        from metrics.accuracy import path_deviation_summary
+        traj = self.player.full_trajectory
+        if len(traj) < 1:
+            return 0.0
+        xs = [p[0] for p in traj]
+        ys = [p[1] for p in traj]
+        wps = getattr(self.level, "optimal_waypoints", [self.level.start, self.level.end])
+        return path_deviation_summary(xs, ys, wps)["mean_path_deviation"]
+
+    @property
+    def time_outside_route_s(self) -> float:
+        """Cumulative seconds spent outside the intended route corridor."""
+        if self.metrics is not None:
+            return self.metrics.time_outside_route_s
+        return 0.0
+
+    @property
+    def deviation_events(self) -> int:
+        """Count of distinct wrong movement / excursion episodes outside intended corridor."""
+        if self.metrics is not None:
+            return self.metrics.deviation_events
+        return 0
+
+    @property
+    def smoothness_score(self) -> float:
+        """
+        Game-derived movement smoothness score [0.0, 100.0] (NOT a clinical measure).
+        Higher = smoother movement. Evaluates directional and speed variations.
+        """
+        if self.metrics is not None:
+            return self.metrics.smoothness_score
+        from metrics.smoothness import movement_smoothness_score
+        traj = self.player.full_trajectory
+        if len(traj) < 3:
+            return 100.0
+        xs = [p[0] for p in traj]
+        ys = [p[1] for p in traj]
+        return movement_smoothness_score(xs, ys)
+
+    @property
+    def raw_trajectory(self) -> List[Tuple[float, float, float]]:
+        """Raw trajectory coordinates with timestamps retained for future algorithm enhancements."""
+        if self.metrics is not None:
+            return self.metrics.raw_trajectory
+        return [(p[0], p[1], 0.0) for p in self.player.full_trajectory]
+
+    @property
     def trail(self):
         return self.player.trail
 
     @property
     def trajectory(self):
         return self.player.trajectory
+
+    @property
+    def full_trajectory(self):
+        return self.player.full_trajectory
 
     @property
     def wall_hit_count(self) -> int:

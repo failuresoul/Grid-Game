@@ -194,33 +194,60 @@ def draw_win_overlay(
 
     pulse = 0.8 + 0.2 * math.sin(anim_t * 5)
     color = tuple(int(c * pulse) for c in config.WIN_COLOR)
-    draw_text(canvas, "GOAL REACHED!", (W // 2 - 160, H // 2 - 110),
+    draw_text(canvas, "GOAL REACHED!", (W // 2 - 160, H // 2 - 155),
               font_scale=1.3, color=color, thickness=3)
 
     m = final_metrics
+    raw_eff = m.get("path_efficiency", 0.0)
+    if 0.0 < raw_eff <= 1.0:
+        eff_pct = raw_eff * 100.0
+    else:
+        eff_pct = raw_eff
+
+    min_dist = m.get("minimum_distance", m.get("min_path_distance_px", 0.0))
+    act_dist = m.get("actual_distance", m.get("actual_distance_px", 0.0))
+    traj_acc = m.get("trajectory_accuracy", 0.0)
+    mean_dev = m.get("mean_path_deviation_px", 0.0)
+    dev_events = m.get("deviation_events", 0)
+    t_outside = m.get("time_outside_route_s", 0.0)
+
     rows = [
-        ("Time",              f"{m.get('completion_time_s', elapsed):.2f} s"),
-        ("Path efficiency",   f"{m.get('path_efficiency', 0) * 100:.1f}%"),
-        ("Norm. jerk score",  f"{m.get('normalised_jerk', 0):.2f}"),
-        ("Tremor index",      f"{m.get('tremor_index', 0) * 100:.1f}%"),
-        ("Peak speed",        f"{m.get('peak_speed_px_s', 0):.0f} px/s"),
-        ("ROM  W × H",        f"{m.get('rom_width_px',0):.0f} × {m.get('rom_height_px',0):.0f} px"),
-        ("Wall hits",         str(wall_hits)),
+        # 1. Accuracy Dimension
+        ("Trajectory accuracy", f"{traj_acc:.1f}%"),
+        ("Mean path deviation", f"{mean_dev:.1f} px"),
+        ("Deviation events",    str(dev_events)),
+        # 2. Path Efficiency Dimension
+        ("Path efficiency",     f"{eff_pct:.1f}%"),
+        # 3. Distance Dimension
+        ("Minimum path",        f"{min_dist:.1f} px"),
+        ("Actual distance",     f"{act_dist:.1f} px"),
+        # 4. Collision Count Dimension
+        ("Wall collisions",     str(wall_hits)),
+        # 5. Time Dimension
+        ("Completion time",     f"{m.get('completion_time_s', elapsed):.2f} s"),
+        ("Time outside route",  f"{t_outside:.2f} s"),
+        # Smoothness & Kinematics
+        ("Game smoothness",     f"{m.get('smoothness_score', 100.0):.1f}/100"),
+        ("Norm. jerk score",    f"{m.get('normalised_jerk', 0):.2f}"),
+        ("Tremor index",        f"{m.get('tremor_index', 0) * 100:.1f}%"),
     ]
-    bx, by = W // 2 - 220, H // 2 - 80
+    bx, by = W // 2 - 240, H // 2 - 135
+    box_w = 480
+    row_h = 26
+    box_h = len(rows) * row_h + 16
     cv2.rectangle(canvas, (bx - 10, by - 10),
-                  (bx + 440, by + len(rows) * 34 + 10), (20, 40, 30), -1)
+                  (bx + box_w, by + box_h), (20, 40, 30), -1)
     cv2.rectangle(canvas, (bx - 10, by - 10),
-                  (bx + 440, by + len(rows) * 34 + 10), config.WIN_COLOR, 1)
+                  (bx + box_w, by + box_h), config.WIN_COLOR, 1)
     for i, (label, val) in enumerate(rows):
-        ry = by + i * 34 + 24
+        ry = by + i * row_h + 18
         draw_text(canvas, label, (bx, ry),
-                  font_scale=0.55, color=config.HUD_LABEL_COLOR)
-        draw_text(canvas, val, (bx + 280, ry),
-                  font_scale=0.6, color=config.HUD_TEXT_COLOR, thickness=1)
+                  font_scale=0.48, color=config.HUD_LABEL_COLOR)
+        draw_text(canvas, val, (bx + 290, ry),
+                  font_scale=0.50, color=config.HUD_TEXT_COLOR, thickness=1)
 
     draw_text(canvas, "Press R to restart  |  ESC to quit",
-              (W // 2 - 200, H - 60), font_scale=0.55, color=(140, 200, 160))
+              (W // 2 - 200, H - 35), font_scale=0.55, color=(140, 200, 160))
 
 
 def draw_timeout_overlay(

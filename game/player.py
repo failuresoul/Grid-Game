@@ -45,8 +45,11 @@ class Player:
         self.py:     float = float(start_y)
         self.radius: int   = int(radius)
 
-        # Continuous trajectory points [(x0, y0), (x1, y1), ...]
-        self.trail: List[Tuple[float, float]] = []
+        # Visual tail on canvas (recent points, up to config.TRAIL_MAX_LENGTH)
+        self.trail: List[Tuple[float, float]] = [(self.px, self.py)]
+        # Complete full trajectory without truncation from session start to finish
+        self._full_trajectory: List[Tuple[float, float]] = [(self.px, self.py)]
+        self._actual_distance: float = 0.0
         self.wall_hit_count: int = 0
         self.is_colliding: bool = False
         self.collision_flash_timer: float = 0.0
@@ -83,17 +86,30 @@ class Player:
         if displacement < min_move_threshold:
             return False
 
+        old_px, old_py = self.px, self.py
+
         # 2. Continuous Collision Detection (CCD)
         new_px, new_py, hit = continuous_move_and_resolve(
             self.px, self.py, tx, ty, float(self.radius), walls, max_step_size=4.0
         )
-        self.px = float(new_px)
-        self.py = float(new_py)
+        new_px = float(new_px)
+        new_py = float(new_py)
 
         # 3. Canvas bounds clamp (continuous floating bounds)
         r = float(self.radius)
-        self.px = max(r, min(self.px, float(config.CANVAS_WIDTH) - r))
-        self.py = max(r, min(self.py, float(config.CANVAS_HEIGHT) - r))
+        new_px = max(r, min(new_px, float(config.CANVAS_WIDTH) - r))
+        new_py = max(r, min(new_py, float(config.CANVAS_HEIGHT) - r))
+
+        # 4. Actual movement distance accumulation: sqrt((x2-x1)^2 + (y2-y1)^2)
+        step_dist = math.hypot(new_px - old_px, new_py - old_py)
+        if step_dist > 1e-6:
+            self._actual_distance += step_dist
+            self.px = new_px
+            self.py = new_py
+            self._full_trajectory.append((self.px, self.py))
+        else:
+            self.px = new_px
+            self.py = new_py
 
         if hit:
             self.wall_hit_count += 1
@@ -106,7 +122,7 @@ class Player:
 
     def record_trail(self, min_dist: float = config.MIN_TRAIL_DIST_PX) -> None:
         """
-        Append current continuous position to the trajectory trail.
+        Append current continuous position to the visual trail.
         Ignores points closer than min_dist to avoid storing static noise.
         """
         pt = (self.px, self.py)
@@ -133,7 +149,9 @@ class Player:
         """Reset player position and clear trajectory for a new session."""
         self.px = float(start_x)
         self.py = float(start_y)
-        self.trail.clear()
+        self.trail = [(self.px, self.py)]
+        self._full_trajectory = [(self.px, self.py)]
+        self._actual_distance = 0.0
         self.wall_hit_count = 0
         self.is_colliding = False
         self.collision_flash_timer = 0.0
@@ -141,6 +159,8 @@ class Player:
     def clear_trajectory(self) -> None:
         """Explicitly clear recorded trajectory points."""
         self.trail.clear()
+        self._full_trajectory.clear()
+        self._actual_distance = 0.0
 
     # ─────────────────────────────────────────────────────────────────────────
     #  Properties (read by GameEngine, MetricsCollector, and Renderer)
@@ -157,7 +177,25 @@ class Player:
         return self.px, self.py
 
     @property
+    def actual_distance(self) -> float:
+        """
+        Actual cumulative hand/player trajectory distance in pixels/game units:
+        Sum of sqrt((x2 - x1)^2 + (y2 - y1)^2) over consecutive movement points.
+        """
+        return float(round(self._actual_distance, 2))
+
+    @property
+    def full_trajectory(self) -> List[Tuple[float, float]]:
+        """Complete, untruncated continuous trajectory from session start to finish."""
+        return list(self._full_trajectory)
+
+    @property
     def trajectory(self) -> List[Tuple[float, float]]:
-        """Return a copy of the stored continuous trajectory points."""
-        return list(self.trail)
+        """Return the complete continuous trajectory points."""
+        return list(self._full_trajectory)
+
+    @property
+    def raw_trajectory(self) -> List[Tuple[float, float]]:
+        """Raw recorded trajectory points [(x, y), ...] retained for future algorithms."""
+        return list(self._full_trajectory)
 
