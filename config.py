@@ -46,6 +46,10 @@ CAMERA_PIP_ENABLED: bool = True
 # is inactive or when no webcam is available. Camera hand tracking remains primary.
 MOUSE_FALLBACK_ENABLED: bool = True
 
+# Real-time telemetry debug overlay: displays Raw X,Y vs. Smoothed X,Y and jitter.
+# Can be toggled at runtime using the 'D' key.
+DEBUG_COORDINATES: bool = False
+
 
 # =============================================================================
 #  2. Camera
@@ -68,12 +72,26 @@ CANVAS_WIDTH:  int = 1000  # Rendering surface width  (px)
 CANVAS_HEIGHT: int = 700   # Rendering surface height (px)
 
 # =============================================================================
-#  4. Player Cursor
+#  4. Player Cursor & Coordinate Smoothing
 # =============================================================================
 
 # Default collision/visual radius -- overridden per difficulty (see Section 10).
 PLAYER_RADIUS: int = 14
 
+# Active smoothing algorithm: "ONE_EURO" (adaptive low-pass) or "EMA" (fixed low-pass)
+SMOOTHING_ALGORITHM: str = "ONE_EURO"
+
+# ── 1-Euro Filter Parameters (Speed-adaptive low-pass filter) ─────────────────
+# Minimum cutoff frequency (Hz): lower values eliminate jitter when stationary.
+ONE_EURO_MIN_CUTOFF: float = 1.0
+
+# Speed coefficient (beta): higher values reduce latency during fast movements.
+ONE_EURO_BETA: float = 0.007
+
+# Cutoff frequency (Hz) for the derivative filter.
+ONE_EURO_D_CUTOFF: float = 1.0
+
+# ── Exponential Moving Average Parameters (fixed low-pass filter) ─────────────
 # Exponential Moving Average factor for cursor smoothing  (0 < alpha <= 1).
 #   Lower = more smoothing  -> good for severe tremor patients.
 #   Higher = more responsive -> appropriate for lighter impairment.
@@ -121,7 +139,7 @@ END_ZONE_RADIUS: int = 24
 WALL_THICKNESS: int = 22
 
 # =============================================================================
-#  7. Hand Tracking  (MediaPipe HandLandmarker thresholds)
+#  7. Hand Tracking  (MediaPipe HandLandmarker thresholds & landmark presets)
 # =============================================================================
 
 # Minimum confidence to classify a frame as containing a hand.
@@ -129,6 +147,20 @@ HAND_DETECTION_CONFIDENCE: float = 0.70
 
 # Minimum confidence to consider a hand from the previous frame still present.
 HAND_TRACKING_CONFIDENCE:  float = 0.60
+
+# Number of consecutive frames without a detected hand before the EMA filter resets.
+# When the hand reappears after this threshold, the cursor immediately locks onto
+# the new hand position without dragging or lagging across the canvas.
+HAND_REACQUIRE_RESET_FRAMES: int = 5
+
+# Supported landmark presets (MediaPipe landmark indices)
+TRACKED_LANDMARKS: Dict[str, int] = {
+    "INDEX_TIP":  8,   # Index finger tip (default, intuitive pointing)
+    "PALM_MCP":   9,   # Middle MCP joint / palm center (stable for tremors)
+    "THUMB_TIP":  4,   # Thumb tip
+    "MIDDLE_TIP": 12,  # Middle finger tip
+    "WRIST":      0,   # Wrist joint (gross arm motion)
+}
 
 # =============================================================================
 #  8. Frame Timing

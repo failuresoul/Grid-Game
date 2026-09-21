@@ -28,6 +28,8 @@ EMG:
     to re-activate hardware support.  See emg/emg_interface.py for details.
 """
 
+from ast import Tuple
+from bokeh.core.property.singletons import Optional
 from __future__ import annotations
 import logging
 import sys
@@ -84,6 +86,9 @@ class RehabGame:
         self.mouse_fallback_enabled: bool = config.MOUSE_FALLBACK_ENABLED
         self._mouse_pos: Optional[Tuple[float, float]] = None
         self._using_mouse: bool = False
+
+        # ── Real-time coordinate telemetry debug mode ────────────────────────
+        self.debug_mode: bool = getattr(config, "DEBUG_COORDINATES", False)
 
         # ── EMG (disabled) ────────────────────────────────────────────────────
         self.emg = None
@@ -217,8 +222,17 @@ class RehabGame:
 
                 self._maybe_save_metrics()
 
+                landmark_name = self.tracker.landmark_name if self.tracker else "INDEX_TIP"
+                raw_coords = self.tracker.raw_coords if self.tracker else None
+                algo_name = getattr(self.tracker, "smoothing_algo_name", "ONE_EURO") if self.tracker else ""
+
                 canvas = self.renderer.draw(
-                    self.engine, dt, pip_frame, is_mouse_fallback=self._using_mouse
+                    self.engine, dt, pip_frame,
+                    is_mouse_fallback=self._using_mouse,
+                    landmark_name=landmark_name,
+                    raw_coords=raw_coords,
+                    debug_mode=self.debug_mode,
+                    algo_name=algo_name,
                 )
                 cv2.imshow(self.WINDOW_NAME, canvas)
 
@@ -235,12 +249,34 @@ class RehabGame:
     #  Keyboard handlers
     # ─────────────────────────────────────────────────────────────────────────
 
+    def _cycle_landmark(self) -> None:
+        """Cycle through common tracked landmarks: Index -> Palm -> Middle -> Thumb -> Wrist."""
+        if not self.tracker:
+            return
+        cycle = [
+            HandTracker.INDEX_FINGER_TIP,
+            HandTracker.MIDDLE_MCP,
+            HandTracker.MIDDLE_FINGER_TIP,
+            HandTracker.THUMB_TIP,
+            HandTracker.WRIST,
+        ]
+        curr = self.tracker.landmark_id
+        idx = cycle.index(curr) if curr in cycle else 0
+        next_id = cycle[(idx + 1) % len(cycle)]
+        name = self.tracker.set_landmark(next_id)
+        log.info(f"Switched tracked landmark to: {name} (id={next_id})")
+
     def _handle_start_key(self, key: int) -> bool:
         """Returns True if the application should quit."""
         if key == 27:
             return True
         if key in (ord('1'), ord('2'), ord('3')):
             self.difficulty = int(chr(key))
+        elif key in (ord('l'), ord('L')):
+            self._cycle_landmark()
+        elif key in (ord('d'), ord('D')):
+            self.debug_mode = not self.debug_mode
+            log.info(f"Debug coordinates overlay toggled: {self.debug_mode}")
         elif key in (ord('m'), ord('M')):
             self.mouse_fallback_enabled = not self.mouse_fallback_enabled
             log.info(f"Mouse fallback toggled: {self.mouse_fallback_enabled}")
@@ -264,6 +300,11 @@ class RehabGame:
         elif key in (ord('p'), ord('P')):
             if self.engine:
                 self.engine.toggle_pause()
+        elif key in (ord('l'), ord('L')):
+            self._cycle_landmark()
+        elif key in (ord('d'), ord('D')):
+            self.debug_mode = not self.debug_mode
+            log.info(f"Debug coordinates overlay toggled: {self.debug_mode}")
         elif key in (ord('m'), ord('M')):
             self.mouse_fallback_enabled = not self.mouse_fallback_enabled
             log.info(f"Mouse fallback toggled: {self.mouse_fallback_enabled}")
@@ -280,6 +321,8 @@ class RehabGame:
         elif key in (13, 32):
             self._start_screen = True
         return False
+
+
 
 
     # ─────────────────────────────────────────────────────────────────────────
