@@ -105,7 +105,8 @@ CURSOR_SMOOTHING: float = 0.30
 CURSOR_LANDMARK: int = 8
 
 # Maximum trail points kept in memory (older ones discarded FIFO).
-TRAIL_MAX_LENGTH: int = 400
+# Sufficient to preserve complete session trajectories across long levels.
+TRAIL_MAX_LENGTH: int = 4000
 
 # Noise dead-zone: movements smaller than this Euclidean distance (px) are ignored
 # to suppress camera jitter and resting hand micro-tremor without artificial snapping.
@@ -246,6 +247,20 @@ HARD: DifficultyConfig = DifficultyConfig(
 
 DIFFICULTIES: Dict[int, DifficultyConfig] = {1: EASY, 2: MEDIUM, 3: HARD}
 DEFAULT_DIFFICULTY: int = 1
+
+# =============================================================================
+#  10b. Maze Generation Mode & Procedural Seed
+# =============================================================================
+
+# Generation mode: "FIXED" (curated pre-designed levels) or "RANDOM" (procedural mazes)
+MAZE_TYPE: str = "FIXED"
+
+# Seed for procedural maze generation.
+# Set to an integer (e.g. 42) for reproducible research, or None for random per session.
+MAZE_SEED: Optional[int] = None
+
+# Maximum regeneration attempts if a random maze fails solvability validation
+MAZE_MAX_REGEN_ATTEMPTS: int = 50
 
 # =============================================================================
 #  11. Metrics / Session Logging

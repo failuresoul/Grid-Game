@@ -172,9 +172,16 @@ class MetricsCollector:
         metrics_dict: dict,
         difficulty:  str = "Unknown",
         level_name:  str = "Unknown",
+        maze_seed:   Optional[Any] = None,
     ) -> Optional[str]:
         """
         Append session results to a date-stamped CSV file.
+
+        Args:
+            metrics_dict: Calculated clinical motion metrics.
+            difficulty:   Active difficulty name.
+            level_name:   Title of the level.
+            maze_seed:    Random seed used for procedural generation (or "FIXED").
 
         Returns:
             Absolute path to the saved file, or None on failure.
@@ -190,6 +197,7 @@ class MetricsCollector:
             "timestamp":  now.strftime("%Y-%m-%d %H:%M:%S"),
             "difficulty": difficulty,
             "level":      level_name,
+            "maze_seed":  str(maze_seed) if maze_seed is not None else "FIXED",
             **metrics_dict,
         }
 

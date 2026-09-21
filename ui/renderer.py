@@ -156,19 +156,41 @@ class Renderer:
     # ─────────────────────────────────────────────────────────────────────────
 
     def _draw_walls(self, canvas: np.ndarray, level) -> None:
-        for (wx, wy, ww, wh) in level.walls:
-            # Glow border
-            overlay = canvas.copy()
-            cv2.rectangle(overlay, (wx - 3, wy - 3), (wx + ww + 3, wy + wh + 3),
-                          config.WALL_BORDER_COLOR, 3)
-            cv2.addWeighted(overlay, 0.5, canvas, 0.5, 0, canvas)
-            # Solid fill
-            cv2.rectangle(canvas, (wx, wy), (wx + ww, wy + wh),
-                          config.WALL_COLOR, -1, cv2.LINE_AA)
-            # 3-D highlight (top & left edges)
-            bright = tuple(min(255, c + 60) for c in config.WALL_COLOR)
-            cv2.line(canvas, (wx, wy),      (wx + ww, wy),      bright, 2, cv2.LINE_AA)
-            cv2.line(canvas, (wx, wy),      (wx, wy + wh),      bright, 2, cv2.LINE_AA)
+        bright = tuple(min(255, c + 60) for c in config.WALL_COLOR)
+        for obs in level.walls:
+            if hasattr(obs, "is_polygon") and obs.is_polygon:
+                # Geometric polygon obstacle
+                pts = np.array(obs.points, dtype=np.int32).reshape((-1, 1, 2))
+                # Glow border
+                overlay = canvas.copy()
+                cv2.polylines(overlay, [pts], isClosed=True, color=config.WALL_BORDER_COLOR,
+                              thickness=5, lineType=cv2.LINE_AA)
+                cv2.addWeighted(overlay, 0.5, canvas, 0.5, 0, canvas)
+                # Solid fill
+                cv2.fillPoly(canvas, [pts], color=config.WALL_COLOR, lineType=cv2.LINE_AA)
+                # 3-D highlight bevel outline
+                cv2.polylines(canvas, [pts], isClosed=True, color=bright,
+                              thickness=2, lineType=cv2.LINE_AA)
+            else:
+                # Geometric rectangle obstacle (RectObstacle, tuple, or duck-typed)
+                if hasattr(obs, "as_rect"):
+                    wx, wy, ww, wh = obs.as_rect()
+                elif isinstance(obs, (tuple, list)) and len(obs) == 4:
+                    wx, wy, ww, wh = int(obs[0]), int(obs[1]), int(obs[2]), int(obs[3])
+                else:
+                    wx, wy, ww, wh = int(obs.x), int(obs.y), int(obs.w), int(obs.h)
+
+                # Glow border
+                overlay = canvas.copy()
+                cv2.rectangle(overlay, (wx - 3, wy - 3), (wx + ww + 3, wy + wh + 3),
+                              config.WALL_BORDER_COLOR, 3)
+                cv2.addWeighted(overlay, 0.5, canvas, 0.5, 0, canvas)
+                # Solid fill
+                cv2.rectangle(canvas, (wx, wy), (wx + ww, wy + wh),
+                              config.WALL_COLOR, -1, cv2.LINE_AA)
+                # 3-D highlight (top & left edges)
+                cv2.line(canvas, (wx, wy),      (wx + ww, wy),      bright, 2, cv2.LINE_AA)
+                cv2.line(canvas, (wx, wy),      (wx, wy + wh),      bright, 2, cv2.LINE_AA)
 
     def _draw_trail(self, canvas: np.ndarray, trail: list) -> None:
         n = len(trail)
@@ -204,18 +226,23 @@ class Renderer:
                   font_scale=0.45, color=config.END_COLOR)
 
     def _draw_hint_path(self, canvas: np.ndarray, level) -> None:
-        sx, sy = level.start
-        ex, ey = level.end
-        total  = math.dist((sx, sy), (ex, ey))
-        if total < 1:
+        pts = level.optimal_waypoints if getattr(level, "optimal_waypoints", None) else [level.start, level.end]
+        if len(pts) < 2:
             return
-        steps = int(total // 30)
-        for i in range(steps):
-            t1 = i / steps
-            t2 = (i + 0.5) / steps
-            p1 = (int(sx + (ex - sx) * t1), int(sy + (ey - sy) * t1))
-            p2 = (int(sx + (ex - sx) * t2), int(sy + (ey - sy) * t2))
-            cv2.line(canvas, p1, p2, (50, 100, 50), 1, cv2.LINE_AA)
+        for seg_idx in range(len(pts) - 1):
+            sx, sy = pts[seg_idx]
+            ex, ey = pts[seg_idx + 1]
+            seg_dist = math.dist((sx, sy), (ex, ey))
+            if seg_dist < 1:
+                continue
+            steps = max(1, int(seg_dist // 25))
+            for i in range(steps):
+                t1 = i / steps
+                t2 = (i + 0.5) / steps
+                p1 = (int(sx + (ex - sx) * t1), int(sy + (ey - sy) * t1))
+                p2 = (int(sx + (ex - sx) * t2), int(sy + (ey - sy) * t2))
+                cv2.line(canvas, p1, p2, (50, 120, 60), 2, cv2.LINE_AA)
+
 
     def _draw_player(self, canvas: np.ndarray, engine: "GameEngine") -> None:
         from game.game_engine import GameState
@@ -243,7 +270,8 @@ class Renderer:
         W, H = self.W, self.H
         y    = 24
 
-        diff_str = f"DIFFICULTY: {engine.difficulty_cfg.name.upper()}"
+        diff_tag = getattr(engine.level, "difficulty_tag", None) or engine.difficulty_cfg.name.upper()
+        diff_str = f"DIFFICULTY: {diff_tag}"
         draw_text(canvas, diff_str, (12, y), font_scale=0.55, color=config.HUD_LABEL_COLOR)
         draw_text(canvas, engine.level.name,
                   (12, y + 26), font_scale=0.45, color=config.HUD_LABEL_COLOR)
@@ -252,8 +280,12 @@ class Renderer:
             draw_text(canvas, f"TRACKING: {landmark_name}", (12, y + 48),
                       font_scale=0.40, color=(100, 210, 160))
 
-        # Development mouse fallback indicator
-        if is_mouse_fallback:
+        # Seed indicator for procedural levels & mouse fallback
+        seed_val = getattr(engine.level, "seed", None)
+        if seed_val is not None:
+            draw_text(canvas, f"[SEED: {seed_val}]", (230, y),
+                      font_scale=0.45, color=(140, 200, 255), thickness=1)
+        elif is_mouse_fallback:
             draw_text(canvas, "[DEV MOUSE ACTIVE]", (230, y),
                       font_scale=0.45, color=(0, 220, 255), thickness=1)
 

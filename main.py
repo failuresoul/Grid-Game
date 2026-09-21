@@ -28,12 +28,12 @@ EMG:
     to re-activate hardware support.  See emg/emg_interface.py for details.
 """
 
-from ast import Tuple
-from bokeh.core.property.singletons import Optional
 from __future__ import annotations
 import logging
 import sys
 import time
+from typing import Optional, Tuple
+
 
 import cv2
 import numpy as np
@@ -346,6 +346,7 @@ class RehabGame:
                 self.engine.final_metrics,
                 difficulty=diff_cfg.name,
                 level_name=self.engine.level.name,
+                maze_seed=self.engine.level.seed,
             )
         self.engine._metrics_saved = True
 
