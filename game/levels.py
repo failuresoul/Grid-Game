@@ -172,6 +172,11 @@ class Level:
     optimal_waypoints: List[Tuple[float, float]] = field(default_factory=list)
     min_path_distance: float = 0.0
 
+    @property
+    def minimum_path_distance(self) -> float:
+        """Alias for min_path_distance."""
+        return self.min_path_distance
+
     def compute_minimum_path(self, player_radius: Optional[float] = None) -> float:
         """
         Compute the shortest collision-free route from START to END considering player radius

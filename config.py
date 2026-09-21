@@ -277,49 +277,48 @@ JERK_WINDOW: int = 5
 #  12. Color Palette  (BGR tuples for OpenCV)
 # =============================================================================
 # All colours are (Blue, Green, Red) tuples in the range [0, 255].
-# Change any value here to restyle the entire game without touching game code.
+# Professional medical/research prototype aesthetic:
+# Clean deep slate, clinical mint, high-contrast cyan, and graphite walls.
 
 # -- Background ---------------------------------------------------------------
 
 # Solid fallback background colour (used if gradient is disabled).
-BACKGROUND_COLOR:  Tuple[int, int, int] = (19,  29,  51)   # dark navy
+BACKGROUND_COLOR:  Tuple[int, int, int] = (18,  20,  26)   # clinical dark slate
+CANVAS_BG_COLOR:   Tuple[int, int, int] = BACKGROUND_COLOR
 
 # Vertical gradient: canvas top -> canvas bottom.
-BG_TOP_COLOR:    Tuple[int, int, int] = (28,  18,  42)   # deep purple
-BG_BOTTOM_COLOR: Tuple[int, int, int] = (10,  40,  60)   # dark teal
+BG_TOP_COLOR:    Tuple[int, int, int] = (24,  26,  34)   # deep slate charcoal
+BG_BOTTOM_COLOR: Tuple[int, int, int] = (14,  16,  22)   # dark clinical navy-charcoal
 
-# -- Walls --------------------------------------------------------------------
+# -- Walls / Obstacles --------------------------------------------------------
 
-WALL_COLOR:        Tuple[int, int, int] = (40,  80, 130)  # steel blue
-WALL_BORDER_COLOR: Tuple[int, int, int] = (80, 160, 220)  # bright edge glow
+WALL_COLOR:        Tuple[int, int, int] = (42,  48,  58)   # clean slate graphite
+WALL_BORDER_COLOR: Tuple[int, int, int] = (85, 110, 140)   # precision hairline border
 
-# -- Player -------------------------------------------------------------------
+# -- Player Cursor ------------------------------------------------------------
 
-# Base / resting player colour.  Also aliased as PLAYER_COLOR_SLOW.
-PLAYER_COLOR:      Tuple[int, int, int] = ( 80, 220, 130)  # teal-green
+# Base / resting player colour (medical mint).
+PLAYER_COLOR:      Tuple[int, int, int] = ( 80, 205, 140)  # calm medical mint
+PLAYER_COLOR_SLOW: Tuple[int, int, int] = PLAYER_COLOR
+PLAYER_COLOR_FAST: Tuple[int, int, int] = ( 90, 215, 245)  # clinical cyan at speed
+PLAYER_GLOW_COLOR: Tuple[int, int, int] = (120, 225, 180)  # subtle mint halo
 
-# Speed-dependent colour interpolation endpoints.
-PLAYER_COLOR_SLOW: Tuple[int, int, int] = PLAYER_COLOR     # identical to base
-PLAYER_COLOR_FAST: Tuple[int, int, int] = ( 60, 120, 255)  # blue-white at speed
+# -- Target Zones -------------------------------------------------------------
 
-# Outer glow colour.
-PLAYER_GLOW_COLOR: Tuple[int, int, int] = (100, 200, 255)  # light cyan
+START_COLOR: Tuple[int, int, int] = ( 70, 195, 110)  # calm medical green
+END_COLOR:   Tuple[int, int, int] = ( 60, 185, 240)  # clinical azure/cyan target
 
-# -- Zones --------------------------------------------------------------------
+# -- Trajectory Trail ---------------------------------------------------------
 
-START_COLOR: Tuple[int, int, int] = ( 50, 200,  80)  # green
-END_COLOR:   Tuple[int, int, int] = ( 30, 200, 255)  # gold cyan
+TRAIL_COLOR: Tuple[int, int, int] = (215, 180,  85)  # clinical soft sky-blue track
 
-# -- Path Trail ---------------------------------------------------------------
+# -- HUD & Typography ---------------------------------------------------------
 
-TRAIL_COLOR: Tuple[int, int, int] = (120, 200, 255)  # faint cyan
+HUD_TEXT_COLOR:   Tuple[int, int, int] = (240, 245, 250)  # crisp high-contrast white
+HUD_LABEL_COLOR:  Tuple[int, int, int] = (140, 165, 190)  # clinical soft steel label
+HUD_ACCENT_COLOR: Tuple[int, int, int] = ( 90, 210, 140)  # medical mint accent
 
-# -- HUD ----------------------------------------------------------------------
+# -- Overlays -----------------------------------------------------------------
 
-HUD_TEXT_COLOR:  Tuple[int, int, int] = (220, 240, 255)  # near-white
-HUD_LABEL_COLOR: Tuple[int, int, int] = (120, 160, 200)  # muted blue
-
-# -- Result Overlays ----------------------------------------------------------
-
-WIN_COLOR:  Tuple[int, int, int] = ( 50, 220, 120)  # bright green
-FAIL_COLOR: Tuple[int, int, int] = ( 60,  60, 220)  # red
+WIN_COLOR:  Tuple[int, int, int] = ( 80, 210, 140)  # medical success mint
+FAIL_COLOR: Tuple[int, int, int] = ( 70,  70, 225)  # soft alert red

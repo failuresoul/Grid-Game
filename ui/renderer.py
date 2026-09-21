@@ -31,8 +31,8 @@ import numpy as np
 import config
 from ui.screens import (
     draw_text, glow_circle, draw_star,
-    draw_start_screen,
-    draw_waiting_overlay, draw_paused_overlay,
+    draw_start_screen, draw_level_select_screen,
+    draw_waiting_overlay, draw_ready_overlay, draw_paused_overlay,
     draw_win_overlay, draw_timeout_overlay,
 )
 
@@ -123,11 +123,11 @@ class Renderer:
 
         # State overlays
         state = engine.state
-        if state == GameState.WAITING:
+        if state in (GameState.READY, GameState.WAITING):
             draw_waiting_overlay(canvas, self.W, self.H, self._t)
         elif state == GameState.PAUSED:
             draw_paused_overlay(canvas, self.W, self.H)
-        elif state == GameState.WIN:
+        elif state in (GameState.COMPLETED, GameState.RESULTS, GameState.WIN):
             draw_win_overlay(
                 canvas, self.W, self.H, self._t,
                 engine.final_metrics or {},
@@ -147,9 +147,32 @@ class Renderer:
         return canvas
 
     def draw_start_screen(self, selected_difficulty: int) -> np.ndarray:
-        """Return a rendered start / difficulty-selection screen."""
+        """Return a rendered start / difficulty-selection screen (MENU state)."""
         canvas = self._bg.copy()
         draw_start_screen(canvas, selected_difficulty, self.W, self.H)
+        return canvas
+
+    def draw_level_select_screen(
+        self,
+        difficulty_name:   str,
+        level_index:       int,
+        total_levels:      int,
+        level_name:        str,
+        min_path_distance: float,
+        wall_count:        int,
+    ) -> np.ndarray:
+        """Return a rendered level preview / selection screen (LEVEL_SELECT state)."""
+        canvas = self._bg.copy()
+        draw_level_select_screen(
+            canvas=canvas,
+            difficulty_name=difficulty_name,
+            level_index=level_index,
+            total_levels=total_levels,
+            level_name=level_name,
+            min_path_distance=min_path_distance,
+            wall_count=wall_count,
+            anim_t=self._t,
+        )
         return canvas
 
     # ─────────────────────────────────────────────────────────────────────────

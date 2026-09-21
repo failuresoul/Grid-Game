@@ -33,12 +33,24 @@ log = logging.getLogger(__name__)
 
 
 class GameState(Enum):
-    """Game session state machine values."""
-    WAITING = auto()   # Waiting for the player to leave the start zone
-    RUNNING = auto()   # Active gameplay
-    PAUSED  = auto()   # Player pressed P
-    WIN     = auto()   # Player reached the end zone
-    TIMEOUT = auto()   # Time limit exceeded
+    """
+    Game session state machine:
+        MENU -> LEVEL_SELECT -> READY -> PLAYING -> COMPLETED -> RESULTS
+    """
+    MENU         = auto()   # Title screen / difficulty selection
+    LEVEL_SELECT = auto()   # Maze level browser and preview
+    READY        = auto()   # Level loaded, cursor at START, waiting for movement
+    PLAYING      = auto()   # Active movement: timer active, CCD active, metrics recorded
+    PAUSED       = auto()   # Session paused
+    COMPLETED    = auto()   # Reached END: timer stopped immediately, metrics finalized, session saved
+    RESULTS      = auto()   # Results screen displaying full clinical breakdown
+    TIMEOUT      = auto()   # Time limit exceeded
+
+
+# Backward compatibility aliases for existing regression tests and modules:
+GameState.WAITING = GameState.READY
+GameState.RUNNING = GameState.PLAYING
+GameState.WIN     = GameState.RESULTS
 
 
 class GameEngine:
@@ -73,7 +85,7 @@ class GameEngine:
             radius=difficulty_cfg.player_radius,
         )
 
-        self.state: GameState = GameState.WAITING
+        self.state: GameState = GameState.READY
         self._session_start: Optional[float] = None
         self._session_end:   Optional[float] = None
 
@@ -93,7 +105,7 @@ class GameEngine:
             cursor: Continuous smoothed (cx, cy) in float coords, or None if no input.
             dt:     Seconds elapsed since the previous frame.
         """
-        if self.state in (GameState.PAUSED, GameState.WIN, GameState.TIMEOUT):
+        if self.state in (GameState.PAUSED, GameState.COMPLETED, GameState.RESULTS, GameState.TIMEOUT, GameState.MENU, GameState.LEVEL_SELECT):
             return
 
         self.player.update_timers(dt)
@@ -103,14 +115,14 @@ class GameEngine:
 
         tx, ty = float(cursor[0]), float(cursor[1])
 
-        # ── WAITING → RUNNING ─────────────────────────────────────────────────
-        if self.state == GameState.WAITING:
+        # ── READY → PLAYING (start timer when movement actually begins) ──────
+        if self.state in (GameState.READY, GameState.WAITING):
             dist = math.dist((tx, ty), self.level.start)
             if dist > self.level.start_r + self.player.radius:
-                self._begin_session()
+                self.start_playing()
 
-        # ── RUNNING: move, record, check win/timeout ──────────────────────────
-        if self.state == GameState.RUNNING:
+        # ── PLAYING: move, record, check win/timeout ──────────────────────────
+        if self.state in (GameState.PLAYING, GameState.RUNNING):
             moved = self.player.move_to_cursor(tx, ty, self.level.walls)
             if moved:
                 self.player.record_trail()
@@ -118,47 +130,105 @@ class GameEngine:
             if self.metrics:
                 self.metrics.record(self.player.px, self.player.py, dt)
 
-            # Win check
+            # Win check: player reaches END target
             if math.dist(self.player.position_f, self.level.end) <= (
                 self.level.end_r + self.player.radius
             ):
-                self._end_session(won=True)
+                self.complete_session(won=True)
                 return
 
             # Time-limit check
             limit = self.difficulty_cfg.time_limit_sec
             if limit > 0 and self.elapsed_time > limit:
-                self._end_session(won=False)
+                self.complete_session(won=False)
 
     # ─────────────────────────────────────────────────────────────────────────
     #  State transitions
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _begin_session(self) -> None:
-        self.state          = GameState.RUNNING
+    def start_playing(self) -> None:
+        """Begin active gameplay session and start timer."""
+        self.state          = GameState.PLAYING
         self._session_start = time.perf_counter()
+        self._session_end   = None
         if self.metrics:
             self.metrics.start_recording()
-        log.info("Session RUNNING")
+        log.info("Session PLAYING — Timer started")
 
-    def _end_session(self, won: bool) -> None:
+    def _begin_session(self) -> None:
+        """Backward-compatible alias for start_playing."""
+        self.start_playing()
+
+    def complete_session(self, won: bool = True) -> None:
+        """
+        Player reached END (or timed out).
+        Immediately freezes the timer, finalizes clinical metrics, saves session,
+        and transitions to RESULTS.
+        """
         self._session_end = time.perf_counter()
-        self.state        = GameState.WIN if won else GameState.TIMEOUT
+        self.state        = GameState.COMPLETED if won else GameState.TIMEOUT
+
         if self.metrics:
             self.metrics.stop_recording()
             self.final_metrics = self.metrics.compute()
+
+        # Save session CSV immediately upon completion
+        self.save_session_metrics()
+
+        # Transition to RESULTS display
+        if won:
+            self.state = GameState.RESULTS
+
         log.info(
-            f"Session {'WIN' if won else 'TIMEOUT'} | "
-            f"time={self.elapsed_time:.1f}s | "
+            f"Session {'COMPLETED/RESULTS' if won else 'TIMEOUT'} | "
+            f"time={self.elapsed_time:.2f}s | "
             f"wall_hits={self.player.wall_hit_count}"
         )
 
+    def _end_session(self, won: bool) -> None:
+        """Backward-compatible alias for complete_session."""
+        self.complete_session(won=won)
+
+    def restart(self) -> None:
+        """
+        Restart the current level back to READY state:
+        Resets player position, clears trajectory, zeroes timers, and resets metrics.
+        """
+        self.player.reset(self.level.start[0], self.level.start[1])
+        self._session_start = None
+        self._session_end   = None
+        self.final_metrics  = None
+        self._metrics_saved = False
+        if self.metrics:
+            self.metrics.start_recording()
+            self.metrics.stop_recording()
+        self.state = GameState.READY
+        log.info("Level RESTARTED -> State: READY (Timer: 0.0s)")
+
+    def save_session_metrics(self) -> Optional[str]:
+        """Save session CSV exactly once upon completion."""
+        if self._metrics_saved:
+            return None
+        if not self.metrics or not self.final_metrics:
+            return None
+
+        self._metrics_saved = True
+        diff_name = self.difficulty_cfg.name if hasattr(self.difficulty_cfg, "name") else str(self.level.difficulty)
+        lvl_name = getattr(self.level, "name", "Level")
+        maze_seed = getattr(self.level, "seed", None)
+        return self.metrics.save_csv(
+            self.final_metrics,
+            difficulty=diff_name,
+            level_name=lvl_name,
+            maze_seed=maze_seed,
+        )
+
     def toggle_pause(self) -> None:
-        """Toggle between RUNNING and PAUSED."""
-        if self.state == GameState.RUNNING:
+        """Toggle between PLAYING and PAUSED."""
+        if self.state in (GameState.PLAYING, GameState.RUNNING):
             self.state = GameState.PAUSED
         elif self.state == GameState.PAUSED:
-            self.state = GameState.RUNNING
+            self.state = GameState.PLAYING
 
     # ─────────────────────────────────────────────────────────────────────────
     #  Read-only properties (used by Renderer and main.py)
@@ -285,5 +355,11 @@ class GameEngine:
         return math.dist(self.player.position_f, self.level.end)
 
     @property
+    def is_completed(self) -> bool:
+        """True if the player successfully reached the goal and completed the maze."""
+        return self.state in (GameState.COMPLETED, GameState.RESULTS, GameState.WIN)
+
+    @property
     def is_finished(self) -> bool:
-        return self.state in (GameState.WIN, GameState.TIMEOUT)
+        """True if the session has concluded (completed or timed out)."""
+        return self.state in (GameState.COMPLETED, GameState.RESULTS, GameState.WIN, GameState.TIMEOUT)

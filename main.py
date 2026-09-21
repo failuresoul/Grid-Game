@@ -73,8 +73,8 @@ class RehabGame:
 
     def __init__(self) -> None:
         self.difficulty:   int  = config.DEFAULT_DIFFICULTY
-        self.level_index:  int  = 0
-        self._start_screen: bool = True
+        # ── Application State Machine ─────────────────────────────────────────
+        self.app_state: GameState = GameState.MENU
 
         self.cap:      cv2.VideoCapture | None = None
         self.tracker:  HandTracker      | None = None
@@ -92,16 +92,15 @@ class RehabGame:
 
         # ── EMG (disabled) ────────────────────────────────────────────────────
         self.emg = None
-        # if config.EMG_ENABLED:
-        #     self.emg = EMGInterface(
-        #         port=config.EMG_PORT,
-        #         device=config.EMG_DEVICE,
-        #         sample_rate=config.EMG_SAMPLE_RATE,
-        #         channels=config.EMG_CHANNELS,
-        #     )
-        #     if not self.emg.connect():
-        #         log.warning("EMG device failed to connect — continuing without EMG.")
-        #         self.emg = None
+
+    @property
+    def _start_screen(self) -> bool:
+        """Backward compatibility helper."""
+        return self.app_state == GameState.MENU
+
+    @_start_screen.setter
+    def _start_screen(self, val: bool) -> None:
+        self.app_state = GameState.MENU if val else GameState.READY
 
     # ─────────────────────────────────────────────────────────────────────────
     #  Setup helpers
@@ -142,9 +141,10 @@ class RehabGame:
         )
         self.engine = GameEngine(level=level, difficulty_cfg=diff_cfg,
                                  metrics_collector=metrics)
+        self.app_state = GameState.READY
         if self.tracker:
             self.tracker.reset_smoothing()
-        log.info(f"New game: {diff_cfg.name}  |  {level.name}")
+        log.info(f"New game: {diff_cfg.name}  |  {level.name} (READY)")
 
     def _on_mouse(self, event: int, x: int, y: int, flags: int, param: any) -> None:
         """Track mouse position for development / testing fallback."""
@@ -202,30 +202,46 @@ class RehabGame:
                     is_mouse = True
                 self._using_mouse = is_mouse
 
-                # ── Start screen ──────────────────────────────────────────────
-                if self._start_screen:
+                # ── 1. MENU State ─────────────────────────────────────────────
+                if self.app_state == GameState.MENU:
                     canvas = self.renderer.draw_start_screen(self.difficulty)
                     self._composite_pip(canvas, pip_frame)
                     cv2.imshow(self.WINDOW_NAME, canvas)
                     key = cv2.waitKey(1) & 0xFF
-                    if self._handle_start_key(key):
+                    if self._handle_menu_key(key):
                         break
                     if cv2.getWindowProperty(self.WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
                         break
                     continue
 
-                # ── Gameplay ──────────────────────────────────────────────────
+                # ── 2. LEVEL_SELECT State ─────────────────────────────────────
+                if self.app_state == GameState.LEVEL_SELECT:
+                    diff_cfg = config.DIFFICULTIES[self.difficulty]
+                    total_levels = self.maze_gen.level_count(self.difficulty)
+                    prev_lvl = self.maze_gen.get_level(self.difficulty, self.level_index)
+                    canvas = self.renderer.draw_level_select_screen(
+                        difficulty_name=diff_cfg.name,
+                        level_index=self.level_index,
+                        total_levels=total_levels,
+                        level_name=prev_lvl.name,
+                        min_path_distance=prev_lvl.minimum_path_distance,
+                        wall_count=len(prev_lvl.walls),
+                    )
+                    self._composite_pip(canvas, pip_frame)
+                    cv2.imshow(self.WINDOW_NAME, canvas)
+                    key = cv2.waitKey(1) & 0xFF
+                    if self._handle_level_select_key(key):
+                        break
+                    if cv2.getWindowProperty(self.WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
+                        break
+                    continue
+
+                # ── 3, 4, 5, 6. READY / PLAYING / COMPLETED / RESULTS ─────────
                 if self.engine is None:
                     self._new_game()
 
                 self.engine.update(cursor, dt)
-
-                # ── EMG integration hook (disabled) ───────────────────────────
-                # if self.emg and self.emg.is_connected:
-                #     activation = self.emg.get_muscle_activation()
-                #     # TODO: map to game mechanic (speed boost, gate unlock, etc.)
-
-                self._maybe_save_metrics()
+                self.app_state = self.engine.state
 
                 landmark_name = self.tracker.landmark_name if self.tracker else "INDEX_TIP"
                 raw_coords = self.tracker.raw_coords if self.tracker else None
@@ -271,12 +287,13 @@ class RehabGame:
         name = self.tracker.set_landmark(next_id)
         log.info(f"Switched tracked landmark to: {name} (id={next_id})")
 
-    def _handle_start_key(self, key: int) -> bool:
-        """Returns True if the application should quit."""
+    def _handle_menu_key(self, key: int) -> bool:
+        """Handle keyboard input on MENU screen."""
         if key == 27:
             return True
         if key in (ord('1'), ord('2'), ord('3')):
             self.difficulty = int(chr(key))
+            self.level_index = 0
         elif key in (ord('l'), ord('L')):
             self._cycle_landmark()
         elif key in (ord('d'), ord('D')):
@@ -285,34 +302,70 @@ class RehabGame:
         elif key in (ord('m'), ord('M')):
             self.mouse_fallback_enabled = not self.mouse_fallback_enabled
             log.info(f"Mouse fallback toggled: {self.mouse_fallback_enabled}")
-        elif key in (13, 32):   # ENTER or SPACE
-            self._start_screen = False
+        elif key in (13, 32):   # ENTER or SPACE -> Proceed to LEVEL_SELECT
+            self.app_state = GameState.LEVEL_SELECT
+            log.info("State transition: MENU -> LEVEL_SELECT")
+        return False
+
+    def _handle_level_select_key(self, key: int) -> bool:
+        """Handle keyboard input on LEVEL_SELECT screen."""
+        if key == 27:  # ESC -> return to MENU
+            self.app_state = GameState.MENU
+            log.info("State transition: LEVEL_SELECT -> MENU")
+            return False
+        if key in (ord('m'), ord('M')):
+            self.app_state = GameState.MENU
+            log.info("State transition: LEVEL_SELECT -> MENU")
+            return False
+        total = self.maze_gen.level_count(self.difficulty)
+        if key in (ord('n'), ord('N'), 83, 2555904):  # N or Right Arrow
+            self.level_index = (self.level_index + 1) % total
+        elif key in (ord('p'), ord('P'), 81, 2424832):  # P or Left Arrow
+            self.level_index = (self.level_index - 1) % total
+        elif key in (ord('1'), ord('2'), ord('3')):
+            self.difficulty = int(chr(key))
+            self.level_index = 0
+        elif key in (13, 32):  # ENTER or SPACE -> Confirm selection, load level -> READY
             if self.cap and self.cap.isOpened():
                 self._build_tracker()
             self._new_game()
+            self.app_state = GameState.READY
+            log.info("State transition: LEVEL_SELECT -> READY")
         return False
 
+    def _handle_start_key(self, key: int) -> bool:
+        """Backward-compatible alias for _handle_menu_key."""
+        return self._handle_menu_key(key)
+
     def _handle_game_key(self, key: int) -> bool:
-        """Returns True if the application should quit."""
+        """Handle keyboard input during READY, PLAYING, COMPLETED, or RESULTS."""
         if key == 27:
             return True
         elif key in (ord('r'), ord('R')):
-            self._new_game()
+            # Restart current level cleanly back to READY
+            if self.engine:
+                self.engine.restart()
+                self.app_state = GameState.READY
+            else:
+                self._new_game()
         elif key in (ord('n'), ord('N')):
+            # Advance to next level
             total = self.maze_gen.level_count(self.difficulty)
             self.level_index = (self.level_index + 1) % total
             self._new_game()
+        elif key in (ord('m'), ord('M')):
+            # Return to main MENU
+            self.app_state = GameState.MENU
+            log.info("Returning to MENU")
         elif key in (ord('p'), ord('P')):
             if self.engine:
                 self.engine.toggle_pause()
+                self.app_state = self.engine.state
         elif key in (ord('l'), ord('L')):
             self._cycle_landmark()
         elif key in (ord('d'), ord('D')):
             self.debug_mode = not self.debug_mode
             log.info(f"Debug coordinates overlay toggled: {self.debug_mode}")
-        elif key in (ord('m'), ord('M')):
-            self.mouse_fallback_enabled = not self.mouse_fallback_enabled
-            log.info(f"Mouse fallback toggled: {self.mouse_fallback_enabled}")
         elif key in (ord('1'), ord('2'), ord('3')):
             new_d = int(chr(key))
             if new_d != self.difficulty:
@@ -323,8 +376,11 @@ class RehabGame:
                 self._new_game()
         elif key in (ord('c'), ord('C')):
             config.CAMERA_PIP_ENABLED = not config.CAMERA_PIP_ENABLED
-        elif key in (13, 32):
-            self._start_screen = True
+        elif key in (13, 32) and self.app_state in (GameState.COMPLETED, GameState.RESULTS):
+            # Advance from results to next level
+            total = self.maze_gen.level_count(self.difficulty)
+            self.level_index = (self.level_index + 1) % total
+            self._new_game()
         return False
 
 
@@ -341,7 +397,7 @@ class RehabGame:
         if self.engine._metrics_saved:
             return
 
-        won      = self.engine.state == GameState.WIN
+        won      = self.engine.state in (GameState.COMPLETED, GameState.RESULTS, GameState.WIN)
         should   = (won and config.SAVE_METRICS_ON_WIN) or \
                    (not won and config.SAVE_METRICS_ON_TIMEOUT)
 
