@@ -17,7 +17,7 @@ import logging
 from typing import List, Optional, Tuple
 
 import config
-from game.collision import resolve_against_walls
+from game.collision import resolve_against_walls, continuous_move_and_resolve
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +32,7 @@ class Player:
       - Noise filtering via dead-zone threshold (MIN_MOVE_PX).
       - Continuous collision resolution sliding along walls without block snapping.
       - Continuous trajectory point storage for clinical kinematics analysis.
+      - Anti-tunneling Continuous Collision Detection (CCD) for high-speed hand gestures.
     """
 
     def __init__(
@@ -47,6 +48,8 @@ class Player:
         # Continuous trajectory points [(x0, y0), (x1, y1), ...]
         self.trail: List[Tuple[float, float]] = []
         self.wall_hit_count: int = 0
+        self.is_colliding: bool = False
+        self.collision_flash_timer: float = 0.0
 
     # ─────────────────────────────────────────────────────────────────────────
     #  Public API
@@ -61,13 +64,12 @@ class Player:
     ) -> bool:
         """
         Move player toward (target_x, target_y) in continuous 2D space.
-
-        Filters out micro-movements smaller than min_move_threshold to suppress
-        camera noise / tremor jitter when the hand is stationary.
+        Uses Continuous Collision Detection (CCD) to prevent tunneling through
+        thin walls even when hand moves rapidly between frames.
 
         Args:
             target_x, target_y: Desired target position from hand tracker / mouse.
-            walls:              List of (wx, wy, ww, wh) obstacle rectangles.
+            walls:              List of obstacle rectangles and polygons.
             min_move_threshold: Dead-zone distance in pixels (defaults to config.MIN_MOVE_PX).
 
         Returns:
@@ -81,24 +83,24 @@ class Player:
         if displacement < min_move_threshold:
             return False
 
-        # 2. Continuous position update (pure 2D floats, no grid snapping)
-        self.px = tx
-        self.py = ty
-
-        # 3. Continuous collision resolution with walls (slides smoothly)
-        new_px, new_py, hit = resolve_against_walls(
-            self.px, self.py, float(self.radius), walls, iterations=3
+        # 2. Continuous Collision Detection (CCD)
+        new_px, new_py, hit = continuous_move_and_resolve(
+            self.px, self.py, tx, ty, float(self.radius), walls, max_step_size=4.0
         )
         self.px = float(new_px)
         self.py = float(new_py)
 
-        # 4. Canvas bounds clamp (continuous floating bounds)
+        # 3. Canvas bounds clamp (continuous floating bounds)
         r = float(self.radius)
         self.px = max(r, min(self.px, float(config.CANVAS_WIDTH) - r))
         self.py = max(r, min(self.py, float(config.CANVAS_HEIGHT) - r))
 
         if hit:
             self.wall_hit_count += 1
+            self.is_colliding = True
+            self.collision_flash_timer = 0.25
+        else:
+            self.is_colliding = False
 
         return True
 
@@ -122,12 +124,19 @@ class Player:
         """Update player cursor radius (e.g. for difficulty changes)."""
         self.radius = max(2, int(radius))
 
+    def update_timers(self, dt: float) -> None:
+        """Update animation and collision visual feedback timers."""
+        if self.collision_flash_timer > 0.0:
+            self.collision_flash_timer = max(0.0, self.collision_flash_timer - dt)
+
     def reset(self, start_x: float, start_y: float) -> None:
         """Reset player position and clear trajectory for a new session."""
         self.px = float(start_x)
         self.py = float(start_y)
         self.trail.clear()
         self.wall_hit_count = 0
+        self.is_colliding = False
+        self.collision_flash_timer = 0.0
 
     def clear_trajectory(self) -> None:
         """Explicitly clear recorded trajectory points."""

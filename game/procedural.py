@@ -169,29 +169,19 @@ class ProceduralMazeGenerator:
             start_pos = (margin + 50, H - margin - 50)
             end_pos   = (W - margin - 50, margin + 50)
             obs_count = rng.randint(3, 5)
-            min_path_target = 800.0
+            min_path_target = 700.0
         elif difficulty == 2:
             target_r = 28
-            quadrant = rng.randint(0, 1)
-            if quadrant == 0:
-                start_pos = (margin + 40, H - margin - 40)
-                end_pos   = (W - margin - 40, margin + 40)
-            else:
-                start_pos = (margin + 40, margin + 40)
-                end_pos   = (W - margin - 40, H - margin - 40)
-            obs_count = rng.randint(6, 9)
-            min_path_target = 1300.0
+            start_pos = (margin + 40, H - margin - 40)
+            end_pos   = (W - margin - 40, margin + 40)
+            obs_count = rng.randint(5, 7)
+            min_path_target = 900.0
         else:
             target_r = 22
-            quadrant = rng.randint(0, 1)
-            if quadrant == 0:
-                start_pos = (margin + 30, H - margin - 30)
-                end_pos   = (W - margin - 30, margin + 30)
-            else:
-                start_pos = (margin + 30, margin + 30)
-                end_pos   = (W - margin - 30, H - margin - 30)
-            obs_count = rng.randint(10, 14)
-            min_path_target = 2200.0
+            start_pos = (margin + 30, H - margin - 30)
+            end_pos   = (W - margin - 30, margin + 30)
+            obs_count = rng.randint(7, 10)
+            min_path_target = 1000.0
 
         builder.set_start(start_pos[0], start_pos[1], r=target_r)
         builder.set_end(end_pos[0], end_pos[1], r=target_r)

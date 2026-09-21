@@ -254,6 +254,14 @@ class Renderer:
         color = tuple(int(c) for c in (slow + (fast - slow) * speed_norm))
 
         pos = engine.player_pos
+
+        # Collision visual alert feedback
+        is_colliding = getattr(engine.player, "is_colliding", False) or (getattr(engine.player, "collision_flash_timer", 0.0) > 0.0)
+        if is_colliding:
+            color = (30, 40, 255)  # Flash red
+            cv2.circle(canvas, pos, engine.radius + 6, (0, 70, 255), 2, cv2.LINE_AA)
+            cv2.circle(canvas, pos, engine.radius + 11, (0, 180, 255), 1, cv2.LINE_AA)
+
         if engine.state == GameState.WAITING:
             r = engine.radius + int(3 * math.sin(self._t * 4))
             glow_circle(canvas, pos, r, color, glow_layers=max(1, config.PLAYER_GLOW_LAYERS - 1))

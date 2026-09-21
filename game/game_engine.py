@@ -96,6 +96,8 @@ class GameEngine:
         if self.state in (GameState.PAUSED, GameState.WIN, GameState.TIMEOUT):
             return
 
+        self.player.update_timers(dt)
+
         if cursor is None:
             return   # freeze player when hand/mouse input is not active
 

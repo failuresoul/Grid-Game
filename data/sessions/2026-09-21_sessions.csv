@@ -1,0 +1,5 @@
+timestamp,difficulty,level,maze_seed,completion_time_s,path_length_px,ideal_distance_px,path_efficiency,peak_speed_px_s,mean_speed_px_s,normalised_jerk,tremor_index,rom_width_px,rom_height_px
+2026-09-21 23:55:00,Medium,Procedural Medium,54321,0.099,947.2,943.4,0.996,15151.5,14351.7,0.0,0.0,800.0,500.0
+2026-09-21 23:55:00,Easy,Easy-1,FIXED,0.099,947.2,943.4,0.996,15151.5,14351.7,0.0,0.0,800.0,500.0
+2026-09-21 23:58:35,Medium,Procedural Medium,54321,0.099,947.2,943.4,0.996,15151.5,14351.7,0.0,0.0,800.0,500.0
+2026-09-21 23:58:35,Easy,Easy-1,FIXED,0.099,947.2,943.4,0.996,15151.5,14351.7,0.0,0.0,800.0,500.0

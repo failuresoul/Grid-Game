@@ -293,3 +293,94 @@ def resolve_against_walls(
     """
     return resolve_against_obstacles(px, py, r, walls, iterations=iterations)
 
+
+def continuous_move_and_resolve(
+    start_x: float,
+    start_y: float,
+    target_x: float,
+    target_y: float,
+    r: float,
+    obstacles: list,
+    max_step_size: float = 4.0,
+    iterations: int = 2,
+) -> Tuple[float, float, bool]:
+    """
+    Continuous Collision Detection (CCD) for a circular cursor moving from
+    (start_x, start_y) towards (target_x, target_y).
+
+    Guarantees:
+      1. Zero Tunneling: Subdivides high-speed frame-to-frame movements into
+         conservative micro-steps (<= r * 0.35, max 4px). Even thin walls cannot be jumped.
+      2. Corner Precision: Correctly resolves circle-vertex collisions with
+         smooth circular arc deflections.
+      3. Wall-Sliding: Retains tangential velocity when sliding along walls.
+      4. Continuous Physics: Never teleports or snaps to grid cells.
+
+    Args:
+        start_x, start_y: Initial player coordinates.
+        target_x, target_y: Desired target coordinates.
+        r: Player collision radius.
+        obstacles: List of geometric obstacles (rectangles and polygons).
+        max_step_size: Maximum distance per sub-step in pixels (default 4.0).
+        iterations: Number of resolution iterations per sub-step for corners/wedges.
+
+    Returns:
+        (final_x, final_y, hit)
+        final_x, final_y: Safe continuous resting position.
+        hit: True if collision occurred during the trajectory.
+    """
+    dx = target_x - start_x
+    dy = target_y - start_y
+    total_dist = math.hypot(dx, dy)
+
+    if total_dist < 1e-6:
+        # Stationary check
+        return resolve_against_obstacles(start_x, start_y, r, obstacles, iterations=iterations)
+
+    # Calculate conservative sub-step size to eliminate tunneling through thin walls
+    step_limit = min(max_step_size, max(1.0, r * 0.35))
+    num_steps = max(1, int(math.ceil(total_dist / step_limit)))
+
+    cur_x = float(start_x)
+    cur_y = float(start_y)
+    curr_tx = float(target_x)
+    curr_ty = float(target_y)
+    any_hit = False
+
+    for step_idx in range(num_steps):
+        rem_steps = num_steps - step_idx
+        step_tx = cur_x + (curr_tx - cur_x) / rem_steps
+        step_ty = cur_y + (curr_ty - cur_y) / rem_steps
+
+        res_x, res_y, hit = resolve_against_obstacles(
+            step_tx, step_ty, r, obstacles, iterations=iterations
+        )
+        if hit:
+            any_hit = True
+            # Compute outward collision normal from penetration resolution
+            push_x = res_x - step_tx
+            push_y = res_y - step_ty
+            push_len = math.hypot(push_x, push_y)
+
+            if push_len > 1e-6:
+                nx = push_x / push_len
+                ny = push_y / push_len
+
+                # Project remaining intended displacement vector onto the wall surface
+                # (zeroes inward normal component, preserving tangential sliding)
+                rem_disp_x = curr_tx - res_x
+                rem_disp_y = curr_ty - res_y
+                inward_comp = rem_disp_x * nx + rem_disp_y * ny
+
+                if inward_comp < 0.0:
+                    # Inward motion pointing into wall: project onto tangent
+                    rem_disp_x -= inward_comp * nx
+                    rem_disp_y -= inward_comp * ny
+                    curr_tx = res_x + rem_disp_x
+                    curr_ty = res_y + rem_disp_y
+
+        cur_x = res_x
+        cur_y = res_y
+
+    return cur_x, cur_y, any_hit
+
