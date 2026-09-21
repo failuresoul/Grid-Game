@@ -231,6 +231,48 @@ class MetricsCollector:
         })
         return result
 
+    def get_trajectory_samples(self) -> List[Dict[str, float]]:
+        """Return list of timestamped trajectory samples [{'x': x, 'y': y, 't': t}, ...]."""
+        return [
+            {"x": round(float(x), 2), "y": round(float(y), 2), "t": round(float(t), 3)}
+            for x, y, t in zip(self._xs, self._ys, self._ts)
+        ]
+
+    def save_session(
+        self,
+        metrics_dict: dict,
+        difficulty: str = "Unknown",
+        level_name: str = "Unknown",
+        maze_seed: Optional[Any] = None,
+        completion_status: str = "COMPLETED",
+        wall_hits: int = 0,
+        save_dir: str = config.METRICS_SAVE_DIR,
+    ) -> Optional[str]:
+        """
+        Record complete session to JSON and daily CSV via metrics.session_recorder.
+        """
+        from metrics.session_recorder import save_session as recorder_save
+        traj = self.get_trajectory_samples()
+        return recorder_save(
+            difficulty=difficulty,
+            maze_seed=maze_seed,
+            completion_status=completion_status,
+            completion_time=float(metrics_dict.get("completion_time_s", self._total_time)),
+            actual_distance=float(metrics_dict.get("actual_distance", metrics_dict.get("path_length_px", 0.0))),
+            minimum_distance=float(metrics_dict.get("minimum_distance", metrics_dict.get("min_path_distance_px", 0.0))),
+            path_efficiency=float(metrics_dict.get("path_efficiency", 0.0)),
+            accuracy=float(metrics_dict.get("trajectory_accuracy", 100.0)),
+            smoothness=float(metrics_dict.get("smoothness_score", 100.0)),
+            collision_count=int(wall_hits),
+            deviation_count=int(metrics_dict.get("deviation_events", 0)),
+            trajectory=traj,
+            optimal_path=self.optimal_waypoints,
+            level_name=level_name,
+            game_performance_metrics=metrics_dict,
+            save_dir=save_dir,
+            save_csv_also=True,
+        )
+
     # ─────────────────────────────────────────────────────────────────────────
     #  CSV persistence
     # ─────────────────────────────────────────────────────────────────────────

@@ -35,6 +35,7 @@ from ui.screens import (
     draw_start_screen, draw_level_select_screen,
     draw_waiting_overlay, draw_ready_overlay, draw_paused_overlay,
     draw_win_overlay, draw_timeout_overlay,
+    draw_history_screen,
 )
 
 if TYPE_CHECKING:
@@ -151,11 +152,47 @@ class Renderer:
                 engine.elapsed_time,
                 engine.wall_hit_count,
             )
+        elif state == GameState.HISTORY:
+            from metrics.history_reader import load_all_sessions
+            sessions = getattr(engine, "history_sessions", None)
+            if sessions is None:
+                sessions = load_all_sessions()
+            cur_filter = getattr(engine, "history_filter", "ALL")
+            cur_page = getattr(engine, "history_page", 0)
+            draw_history_screen(
+                canvas=canvas,
+                W=self.W,
+                H=self.H,
+                sessions=sessions,
+                current_filter=cur_filter,
+                page=cur_page,
+                mouse_pos=mouse_pos,
+            )
 
         if pip_frame is not None and config.CAMERA_PIP_ENABLED:
             self._draw_pip(canvas, pip_frame)
 
         return canvas
+
+    def draw_history_screen(
+        self,
+        sessions: Sequence[Any],
+        current_filter: str = "ALL",
+        page: int = 0,
+        mouse_pos: Optional[Tuple[float, float]] = None,
+    ) -> Tuple[np.ndarray, List[Tuple[str, Tuple[int, int, int, int], str, str]]]:
+        """Return a rendered progress and history screen (HISTORY state)."""
+        canvas = self._bg.copy()
+        buttons = draw_history_screen(
+            canvas=canvas,
+            W=self.W,
+            H=self.H,
+            sessions=sessions,
+            current_filter=current_filter,
+            page=page,
+            mouse_pos=mouse_pos,
+        )
+        return canvas, buttons
 
     def draw_start_screen(self, selected_difficulty: int) -> np.ndarray:
         """Return a rendered start / difficulty-selection screen (MENU state)."""

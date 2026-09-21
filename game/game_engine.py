@@ -45,12 +45,14 @@ class GameState(Enum):
     COMPLETED    = auto()   # Reached END: timer stopped immediately, metrics finalized, session saved
     RESULTS      = auto()   # Results screen displaying full clinical breakdown
     TIMEOUT      = auto()   # Time limit exceeded
+    HISTORY      = auto()   # Progress / historical session performance & trends
 
 
 # Backward compatibility aliases for existing regression tests and modules:
-GameState.WAITING = GameState.READY
-GameState.RUNNING = GameState.PLAYING
-GameState.WIN     = GameState.RESULTS
+GameState.WAITING  = GameState.READY
+GameState.RUNNING  = GameState.PLAYING
+GameState.WIN      = GameState.RESULTS
+GameState.PROGRESS = GameState.HISTORY
 
 
 class GameEngine:
@@ -92,6 +94,7 @@ class GameEngine:
         # Final computed metrics (set when session ends)
         self.final_metrics: Optional[dict] = None
         self._metrics_saved: bool = False
+        self.last_saved_session_file: Optional[str] = None
 
     # ─────────────────────────────────────────────────────────────────────────
     #  Main update — called every frame by main.py
@@ -105,7 +108,7 @@ class GameEngine:
             cursor: Continuous smoothed (cx, cy) in float coords, or None if no input.
             dt:     Seconds elapsed since the previous frame.
         """
-        if self.state in (GameState.PAUSED, GameState.COMPLETED, GameState.RESULTS, GameState.TIMEOUT, GameState.MENU, GameState.LEVEL_SELECT):
+        if self.state in (GameState.PAUSED, GameState.COMPLETED, GameState.RESULTS, GameState.TIMEOUT, GameState.MENU, GameState.LEVEL_SELECT, GameState.HISTORY):
             return
 
         self.player.update_timers(dt)
@@ -199,6 +202,7 @@ class GameEngine:
         self._session_end   = None
         self.final_metrics  = None
         self._metrics_saved = False
+        self.last_saved_session_file = None
         if self.metrics:
             self.metrics.start_recording()
             self.metrics.stop_recording()
@@ -206,22 +210,55 @@ class GameEngine:
         log.info("Level RESTARTED -> State: READY (Timer: 0.0s)")
 
     def save_session_metrics(self) -> Optional[str]:
-        """Save session CSV exactly once upon completion."""
+        """Save session recording (JSON + daily CSV) exactly once upon completion."""
         if self._metrics_saved:
-            return None
-        if not self.metrics or not self.final_metrics:
-            return None
+            return self.last_saved_session_file
 
         self._metrics_saved = True
-        diff_name = self.difficulty_cfg.name if hasattr(self.difficulty_cfg, "name") else str(self.level.difficulty)
+        diff_name = self.difficulty_cfg.name if hasattr(self.difficulty_cfg, "name") else str(getattr(self.level, "difficulty", "EASY"))
         lvl_name = getattr(self.level, "name", "Level")
         maze_seed = getattr(self.level, "seed", None)
-        return self.metrics.save_csv(
-            self.final_metrics,
+        status = "COMPLETED" if self.state in (GameState.COMPLETED, GameState.RESULTS, GameState.WIN) else "TIMEOUT"
+
+        # Trajectory points
+        traj_samples = []
+        if self.metrics and hasattr(self.metrics, "get_trajectory_samples"):
+            traj_samples = self.metrics.get_trajectory_samples()
+        if not traj_samples and hasattr(self.player, "trajectory"):
+            traj_samples = [{"x": p[0], "y": p[1], "t": 0.0} for p in self.player.trajectory]
+
+        # Metrics values
+        m = self.final_metrics or {}
+        completion_t = float(m.get("completion_time_s", self.elapsed_time))
+        act_dist = float(m.get("actual_distance", self.actual_distance))
+        min_dist = float(m.get("minimum_distance", self.minimum_distance))
+        eff = float(m.get("path_efficiency", self.path_efficiency))
+        acc = float(m.get("trajectory_accuracy", self.trajectory_accuracy))
+        smooth = float(m.get("smoothness_score", self.smoothness_score))
+        wall_hits = int(self.player.wall_hit_count)
+        dev_cnt = int(m.get("deviation_events", 0))
+
+        from metrics.session_recorder import save_session
+        saved_file = save_session(
             difficulty=diff_name,
-            level_name=lvl_name,
             maze_seed=maze_seed,
+            completion_status=status,
+            completion_time=completion_t,
+            actual_distance=act_dist,
+            minimum_distance=min_dist,
+            path_efficiency=eff,
+            accuracy=acc,
+            smoothness=smooth,
+            collision_count=wall_hits,
+            deviation_count=dev_cnt,
+            trajectory=traj_samples,
+            optimal_path=getattr(self.level, "optimal_waypoints", []),
+            level_name=lvl_name,
+            game_performance_metrics=m,
+            save_csv_also=True,
         )
+        self.last_saved_session_file = saved_file
+        return saved_file
 
     def toggle_pause(self) -> None:
         """Toggle between PLAYING and PAUSED."""

@@ -1,0 +1,78 @@
+{
+  "timestamp": "2026-09-22 01:13:11",
+  "session_id": "session_20260922_011311_e7a71e78",
+  "difficulty": "EASY",
+  "maze_seed": 4242,
+  "completion_status": "COMPLETED",
+  "completion_time": 0.1,
+  "actual_distance": 168.5,
+  "minimum_distance": 234.6,
+  "path_efficiency": 100.0,
+  "accuracy": 94.4,
+  "smoothness": 88.2,
+  "collision_count": 0,
+  "deviation_count": 0,
+  "trajectory": [
+    {
+      "x": 100.0,
+      "y": 40.0,
+      "t": 0.033
+    },
+    {
+      "x": 180.0,
+      "y": 40.0,
+      "t": 0.066
+    },
+    {
+      "x": 245.0,
+      "y": 100.0,
+      "t": 0.099
+    }
+  ],
+  "optimal_path": [
+    {
+      "x": 50.0,
+      "y": 100.0
+    },
+    {
+      "x": 135.0,
+      "y": 45.0
+    },
+    {
+      "x": 177.0,
+      "y": 45.0
+    },
+    {
+      "x": 250.0,
+      "y": 100.0
+    }
+  ],
+  "level_name": "TestMaze",
+  "game_performance_metrics": {
+    "completion_time_s": 0.099,
+    "minimum_distance": 234.6,
+    "actual_distance": 168.5,
+    "actual_distance_px": 168.5,
+    "path_length_px": 168.5,
+    "ideal_distance_px": 200.0,
+    "min_path_distance_px": 234.6,
+    "path_efficiency": 100.0,
+    "path_efficiency_ratio": 1.0,
+    "trajectory_accuracy": 94.4,
+    "mean_path_deviation_px": 10.7,
+    "max_path_deviation_px": 23.2,
+    "rms_path_deviation_px": 13.9,
+    "time_outside_route_s": 0.0,
+    "pct_time_outside": 0.0,
+    "deviation_events": 0,
+    "corridor_adherence_pct": 100.0,
+    "peak_speed_px_s": 2680.6,
+    "mean_speed_px_s": 2552.4,
+    "smoothness_score": 88.2,
+    "game_smoothness_score": 88.2,
+    "normalised_jerk": 0.0,
+    "tremor_index": 0.0,
+    "rom_width_px": 145.0,
+    "rom_height_px": 60.0
+  }
+}

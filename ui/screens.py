@@ -197,13 +197,14 @@ def draw_start_screen(
     for i, line in enumerate([
         "ENTER / SPACE  ->  Select Level",
         "1 / 2 / 3      ->  Change difficulty",
+        "H              ->  View Progress & History (Sessions & Trends)",
         "L              ->  Cycle tracked landmark",
         "D              ->  Toggle debug telemetry",
         "M              ->  Toggle mouse fallback",
         "ESC            ->  Quit",
     ]):
-        draw_text(canvas, line, (W // 2 - 200, 560 + i * 26),
-                  font_scale=0.5, color=(140, 180, 210))
+        draw_text(canvas, line, (W // 2 - 200, 555 + i * 24),
+                  font_scale=0.48, color=(140, 180, 210))
 
 
 def draw_level_select_screen(
@@ -675,3 +676,376 @@ def draw_timeout_overlay(
               font_scale=0.65, color=(180, 140, 200))
     draw_text(canvas, "Press R to restart  |  ESC to quit",
               (W // 2 - 200, H - 60), font_scale=0.55, color=(140, 120, 180))
+
+
+# =============================================================================
+#  7. Progress & History Screen
+# =============================================================================
+
+def _draw_trend_sparkline(
+    canvas: np.ndarray,
+    x: int, y: int, w: int, h: int,
+    title: str,
+    values: Sequence[float],
+    unit: str = "",
+    color: Tuple[int, int, int] = (100, 220, 140),
+) -> None:
+    """Render a compact clinical trend sparkline on OpenCV canvas."""
+    cv2.rectangle(canvas, (x, y), (x + w, y + h), (16, 20, 26), -1)
+    cv2.rectangle(canvas, (x, y), (x + w, y + h), (42, 54, 68), 1, cv2.LINE_AA)
+
+    # Title & latest value header
+    draw_text(canvas, title, (x + 8, y + 16), font_scale=0.36, color=(180, 200, 220), thickness=1)
+
+    if not values:
+        draw_text(canvas, "--", (x + w - 30, y + 16), font_scale=0.36, color=(110, 130, 150))
+        draw_text(canvas, "No data", (x + w // 2 - 24, y + h // 2 + 6), font_scale=0.36, color=(90, 105, 125))
+        return
+
+    latest_val = values[-1]
+    latest_str = f"{latest_val:.1f}{unit}" if isinstance(latest_val, float) else f"{latest_val}{unit}"
+    draw_text(canvas, latest_str, (x + w - 70, y + 16), font_scale=0.38, color=color, thickness=1)
+
+    # Plot area bounds
+    plot_x = x + 8
+    plot_y = y + 24
+    plot_w = w - 16
+    plot_h = h - 30
+
+    # Grid / baseline guideline
+    mid_y = plot_y + plot_h // 2
+    cv2.line(canvas, (plot_x, mid_y), (plot_x + plot_w, mid_y), (28, 36, 46), 1, cv2.LINE_AA)
+
+    n = len(values)
+    if n == 1:
+        pt = (plot_x + plot_w // 2, mid_y)
+        cv2.circle(canvas, pt, 4, color, -1, cv2.LINE_AA)
+        cv2.circle(canvas, pt, 6, color, 1, cv2.LINE_AA)
+        return
+
+    vmin = min(values)
+    vmax = max(values)
+    vrange = vmax - vmin if vmax > vmin else 1.0
+
+    pts: List[Tuple[int, int]] = []
+    for idx, v in enumerate(values):
+        px = int(round(plot_x + (float(idx) / (n - 1)) * plot_w))
+        py = int(round(plot_y + plot_h - ((float(v) - vmin) / vrange) * plot_h))
+        pts.append((px, py))
+
+    # Connect lines
+    for i in range(1, len(pts)):
+        cv2.line(canvas, pts[i - 1], pts[i], color, 2, cv2.LINE_AA)
+
+    # Plot vertices
+    for pt in pts:
+        cv2.circle(canvas, pt, 2, color, -1, cv2.LINE_AA)
+
+    # Focal marker for the latest session
+    cv2.circle(canvas, pts[-1], 4, color, -1, cv2.LINE_AA)
+    cv2.circle(canvas, pts[-1], 6, (255, 255, 255), 1, cv2.LINE_AA)
+
+
+def get_history_button_rects(
+    W: int, H: int,
+    current_filter: str = "ALL",
+    page: int = 0,
+    total_pages: int = 1,
+) -> List[Tuple[str, Tuple[int, int, int, int], str, str]]:
+    """Return layout rectangles for all clickable buttons on History screen."""
+    buttons: List[Tuple[str, Tuple[int, int, int, int], str, str]] = []
+
+    # 1. Filter tabs (Top right)
+    tab_w, tab_h = 74, 26
+    filters = [("FILTER_ALL", "ALL [1]", "1"),
+               ("FILTER_EASY", "EASY [2]", "2"),
+               ("FILTER_MEDIUM", "MED [3]", "3"),
+               ("FILTER_HARD", "HARD [4]", "4")]
+    start_tab_x = W - 20 - (len(filters) * (tab_w + 6))
+    tab_y = 30
+    for idx, (action, label, key) in enumerate(filters):
+        bx = start_tab_x + idx * (tab_w + 6)
+        buttons.append((action, (bx, tab_y, tab_w, tab_h), label, key))
+
+    # 2. Pagination buttons (Inside table card)
+    if total_pages > 1:
+        pag_y = H - 104
+        buttons.append(("PREV_PAGE", (28, pag_y, 74, 22), "< PREV", "P"))
+        buttons.append(("NEXT_PAGE", (160, pag_y, 74, 22), "NEXT >", "N"))
+
+    # 3. Bottom action navigation buttons
+    btn_y = H - 54
+    btn_h = 36
+    action_btns = [
+        ("MAIN_MENU", "MAIN MENU [M]", "M"),
+        ("LEVEL_SELECT", "LEVEL SELECT [L]", "L"),
+        ("EXIT", "EXIT [ESC]", "ESC"),
+    ]
+    spacing = 14
+    margin = 24
+    total_w = W - 2 * margin
+    btn_w = (total_w - (len(action_btns) - 1) * spacing) // len(action_btns)
+
+    for idx, (action, label, key) in enumerate(action_btns):
+        bx = margin + idx * (btn_w + spacing)
+        buttons.append((action, (bx, btn_y, btn_w, btn_h), label, key))
+
+    return buttons
+
+
+def draw_history_screen(
+    canvas: np.ndarray,
+    W: int,
+    H: int,
+    sessions: Sequence[Dict[str, Any]],
+    current_filter: str = "ALL",
+    page: int = 0,
+    rows_per_page: int = 7,
+    mouse_pos: Optional[Tuple[float, float]] = None,
+) -> List[Tuple[str, Tuple[int, int, int, int], str, str]]:
+    """
+    Render clinical progress and historical performance screen:
+    - Top header with longitudinal framing & difficulty filter tabs
+    - Left Panel: Historical sessions table (Session, Difficulty, Time, Distance, Efficiency, Accuracy, Smoothness, Collisions)
+    - Right Panel: 5 Trend Graphs (Time, Distance, Efficiency, Accuracy, Smoothness)
+    - If empty: "No previous sessions available."
+    - Non-diagnostic measurement visualization only.
+    """
+    # ── 1. Semi-translucent dark slate backdrop ──────────────────────────────
+    overlay = canvas.copy()
+    cv2.rectangle(overlay, (0, 0), (W, H), (14, 17, 23), -1)
+    cv2.addWeighted(overlay, 0.96, canvas, 0.04, 0, canvas)
+
+    # Filter sessions
+    norm_filter = current_filter.upper()
+    if norm_filter in ("ALL", ""):
+        filtered = list(sessions)
+    else:
+        filtered = [s for s in sessions if norm_filter in s.get("difficulty", "").upper()]
+
+    total_sessions = len(filtered)
+    total_pages = max(1, (total_sessions + rows_per_page - 1) // rows_per_page) if total_sessions > 0 else 1
+    page = max(0, min(page, total_pages - 1))
+
+    # ── 2. Header Bar ────────────────────────────────────────────────────────
+    draw_text(canvas, "REHABILITATION PROGRESS & HISTORY", (24, 38),
+              font_scale=0.76, color=(245, 250, 255), thickness=2)
+    draw_text(canvas, "Recorded Game Performance Measurements", (24, 60),
+              font_scale=0.44, color=(120, 210, 160), thickness=1)
+
+    # ── 3. Filter Tabs (Top Right) ───────────────────────────────────────────
+    buttons = get_history_button_rects(W, H, current_filter=norm_filter, page=page, total_pages=total_pages)
+
+    for action, (bx, by, bw, bh), label, _ in buttons:
+        if action.startswith("FILTER_"):
+            target_filter = action.replace("FILTER_", "")
+            is_active = (target_filter == norm_filter) or (target_filter == "ALL" and norm_filter in ("ALL", ""))
+            is_hover = False
+            if mouse_pos:
+                mx, my = mouse_pos
+                is_hover = bx <= mx <= bx + bw and by <= my <= by + bh
+
+            if is_active:
+                bg_col = (55, 95, 80)
+                border_col = (100, 220, 150)
+                txt_col = (230, 255, 240)
+            elif is_hover:
+                bg_col = (38, 48, 62)
+                border_col = (120, 160, 200)
+                txt_col = (240, 248, 255)
+            else:
+                bg_col = (22, 28, 36)
+                border_col = (50, 65, 82)
+                txt_col = (150, 175, 200)
+
+            cv2.rectangle(canvas, (bx, by), (bx + bw, by + bh), bg_col, -1)
+            cv2.rectangle(canvas, (bx, by), (bx + bw, by + bh), border_col, 1, cv2.LINE_AA)
+            draw_text(canvas, label, (bx + 8, by + 18), font_scale=0.38, color=txt_col, thickness=1)
+
+    # ── 4. Main Body: Empty State or Active Panels ───────────────────────────
+    if total_sessions == 0:
+        # Centered Empty State Card
+        card_w, card_h = 540, 200
+        cx = (W - card_w) // 2
+        cy = (H - card_h) // 2 - 10
+
+        cv2.rectangle(canvas, (cx, cy), (cx + card_w, cy + card_h), (18, 22, 30), -1)
+        cv2.rectangle(canvas, (cx, cy), (cx + card_w, cy + card_h), (55, 75, 95), 1, cv2.LINE_AA)
+
+        # Subtle info beacon circle
+        cv2.circle(canvas, (cx + card_w // 2, cy + 50), 22, (35, 48, 65), -1, cv2.LINE_AA)
+        cv2.circle(canvas, (cx + card_w // 2, cy + 50), 22, (80, 115, 155), 1, cv2.LINE_AA)
+        draw_text(canvas, "i", (cx + card_w // 2 - 4, cy + 57), font_scale=0.60, color=(160, 205, 250), thickness=2)
+
+        draw_text(canvas, "No previous sessions available.", (cx + 100, cy + 105),
+                  font_scale=0.66, color=(240, 245, 250), thickness=2)
+        
+        filter_hint = f" (for {norm_filter})" if norm_filter != "ALL" else ""
+        draw_text(canvas, f"Complete a maze level to record performance history{filter_hint}.",
+                  (cx + 65, cy + 138), font_scale=0.44, color=(140, 165, 190))
+
+    else:
+        # Layout Geometry
+        card_top = 74
+        card_bot = H - 68
+        card_h = card_bot - card_top
+        card_gap = 16
+
+        left_w = int((W - 2 * 20 - card_gap) * 0.53)
+        right_w = (W - 2 * 20 - card_gap) - left_w
+
+        c1_x = 20
+        c2_x = c1_x + left_w + card_gap
+
+        # ── Left Card: Historical Sessions Table ─────────────────────────────
+        cv2.rectangle(canvas, (c1_x, card_top), (c1_x + left_w, card_top + card_h), (18, 22, 30), -1)
+        cv2.rectangle(canvas, (c1_x, card_top), (c1_x + left_w, card_top + card_h), (55, 75, 95), 1, cv2.LINE_AA)
+
+        # Card Title
+        draw_text(canvas, f"HISTORICAL SESSIONS ({total_sessions} total)", (c1_x + 14, card_top + 24),
+                  font_scale=0.46, color=(140, 195, 240), thickness=2)
+
+        # Table Column Headers
+        th_y = card_top + 46
+        cv2.line(canvas, (c1_x + 12, th_y + 8), (c1_x + left_w - 12, th_y + 8), (45, 60, 75), 1)
+
+        cols = [
+            ("#",        c1_x + 14),
+            ("Diff",     c1_x + 46),
+            ("Time",     c1_x + 100),
+            ("Dist",     c1_x + 155),
+            ("Eff",      c1_x + 215),
+            ("Acc",      c1_x + 265),
+            ("Smooth",   c1_x + 315),
+            ("Hits",     c1_x + 372),
+        ]
+        for name, col_x in cols:
+            draw_text(canvas, name, (col_x, th_y), font_scale=0.38, color=(130, 155, 180), thickness=1)
+
+        # Display rows in reverse chronological order (newest first on page 0)
+        table_sessions = list(reversed(filtered))
+        start_idx = page * rows_per_page
+        end_idx = min(start_idx + rows_per_page, total_sessions)
+        page_rows = table_sessions[start_idx:end_idx]
+
+        row_y = th_y + 28
+        row_h = 32
+
+        for i, s in enumerate(page_rows):
+            # Alternating subtle row striping
+            bg_row = (22, 28, 38) if i % 2 == 0 else (18, 22, 30)
+            cv2.rectangle(canvas, (c1_x + 10, row_y - 18), (c1_x + left_w - 10, row_y + row_h - 18), bg_row, -1)
+
+            sess_num = f"#{total_sessions - (start_idx + i)}"
+            diff_tag = str(s.get("difficulty", "EASY"))[:4].upper()
+            if "EAS" in diff_tag:
+                diff_c = (100, 215, 140)
+            elif "HAR" in diff_tag:
+                diff_c = (90, 100, 245)
+            else:
+                diff_c = (60, 190, 250)
+
+            t_val = f"{float(s.get('completion_time', 0.0)):.1f}s"
+            d_val = f"{int(round(float(s.get('actual_distance', 0.0))))}px"
+            eff_val = f"{float(s.get('path_efficiency', 0.0)):.1f}%"
+            acc_val = f"{float(s.get('accuracy', 100.0)):.0f}%"
+            sm_val  = f"{float(s.get('smoothness', 100.0)):.0f}"
+            hit_val = str(s.get("collision_count", 0))
+            hit_c   = (80, 95, 235) if int(s.get("collision_count", 0)) > 0 else (170, 195, 215)
+
+            draw_text(canvas, sess_num, (c1_x + 14, row_y), font_scale=0.36, color=(140, 160, 185))
+            draw_text(canvas, diff_tag, (c1_x + 46, row_y), font_scale=0.36, color=diff_c)
+            draw_text(canvas, t_val,    (c1_x + 100, row_y), font_scale=0.36, color=(225, 235, 245))
+            draw_text(canvas, d_val,    (c1_x + 155, row_y), font_scale=0.36, color=(210, 225, 240))
+            draw_text(canvas, eff_val,  (c1_x + 215, row_y), font_scale=0.36, color=(120, 215, 160))
+            draw_text(canvas, acc_val,  (c1_x + 265, row_y), font_scale=0.36, color=(200, 160, 225))
+            draw_text(canvas, sm_val,   (c1_x + 315, row_y), font_scale=0.36, color=(235, 205, 120))
+            draw_text(canvas, hit_val,  (c1_x + 372, row_y), font_scale=0.36, color=hit_c)
+
+            row_y += row_h
+
+        # Pagination row at bottom of left card
+        if total_pages > 1:
+            pag_y = card_bot - 18
+            draw_text(canvas, f"Page {page + 1} of {total_pages}", (c1_x + left_w // 2 - 32, pag_y),
+                      font_scale=0.38, color=(140, 165, 190))
+
+            for action, (bx, by, bw, bh), label, _ in buttons:
+                if action in ("PREV_PAGE", "NEXT_PAGE"):
+                    cv2.rectangle(canvas, (bx, by), (bx + bw, by + bh), (25, 34, 45), -1)
+                    cv2.rectangle(canvas, (bx, by), (bx + bw, by + bh), (55, 75, 100), 1, cv2.LINE_AA)
+                    draw_text(canvas, label, (bx + 8, by + 16), font_scale=0.36, color=(180, 205, 235))
+
+        # ── Right Card: 5 Trend Graphs ───────────────────────────────────────
+        cv2.rectangle(canvas, (c2_x, card_top), (c2_x + right_w, card_top + card_h), (18, 22, 30), -1)
+        cv2.rectangle(canvas, (c2_x, card_top), (c2_x + right_w, card_top + card_h), (55, 75, 95), 1, cv2.LINE_AA)
+
+        draw_text(canvas, "PERFORMANCE TRENDS OVER SESSIONS", (c2_x + 14, card_top + 24),
+                  font_scale=0.46, color=(140, 195, 240), thickness=2)
+
+        # Extract series (chronological: oldest to newest for trend graph)
+        from metrics.history_reader import extract_trend_series
+        trends = extract_trend_series(filtered)
+
+        graph_x = c2_x + 12
+        graph_w = right_w - 24
+        # 5 trend graphs stacked vertically
+        graph_top = card_top + 38
+        available_h = card_h - 48
+        graph_h = (available_h - 4 * 6) // 5
+
+        trend_configs = [
+            ("Time over sessions",       trends["completion_time"], " s",   (230, 200, 80)),
+            ("Distance over sessions",   trends["actual_distance"], " px",  (240, 180, 70)),
+            ("Efficiency over sessions", trends["path_efficiency"], "%",    (100, 220, 140)),
+            ("Accuracy over sessions",   trends["accuracy"],        "%",    (210, 150, 220)),
+            ("Smoothness over sessions", trends["smoothness"],      "/100", (60, 205, 245)),
+        ]
+
+        for idx, (title, vals, unit, col) in enumerate(trend_configs):
+            gy = graph_top + idx * (graph_h + 6)
+            _draw_trend_sparkline(
+                canvas=canvas,
+                x=graph_x,
+                y=gy,
+                w=graph_w,
+                h=graph_h,
+                title=title,
+                values=vals,
+                unit=unit,
+                color=col,
+            )
+
+    # ── 5. Bottom Footnote & Navigation Action Buttons ───────────────────────
+    footnote = "* Visualizes recorded measurements over time. Does not evaluate medical recovery or automated diagnosis."
+    draw_text(canvas, footnote, (24, H - 58), font_scale=0.34, color=(105, 125, 145))
+
+    for action, (bx, by, bw, bh), label, key in buttons:
+        if action in ("MAIN_MENU", "LEVEL_SELECT", "EXIT"):
+            is_hover = False
+            if mouse_pos:
+                mx, my = mouse_pos
+                is_hover = bx <= mx <= bx + bw and by <= my <= by + bh
+
+            if action == "MAIN_MENU":
+                base_col = (30, 48, 68)
+                border_col = (85, 140, 200) if is_hover else (60, 95, 135)
+                text_col = (245, 250, 255)
+            elif action == "LEVEL_SELECT":
+                base_col = (25, 52, 45)
+                border_col = (70, 185, 130) if is_hover else (45, 120, 85)
+                text_col = (225, 250, 235)
+            else:  # EXIT
+                base_col = (45, 25, 25)
+                border_col = (195, 80, 80) if is_hover else (125, 50, 50)
+                text_col = (255, 225, 225)
+
+            if is_hover:
+                base_col = tuple(min(255, c + 25) for c in base_col)
+
+            cv2.rectangle(canvas, (bx, by), (bx + bw, by + bh), base_col, -1)
+            cv2.rectangle(canvas, (bx, by), (bx + bw, by + bh), border_col, 1, cv2.LINE_AA)
+            draw_text(canvas, label, (bx + bw // 2 - 56, by + 23),
+                      font_scale=0.44, color=text_col, thickness=1)
+
+    return buttons

@@ -435,15 +435,8 @@ class RehabGame:
         should   = (won and config.SAVE_METRICS_ON_WIN) or \
                    (not won and config.SAVE_METRICS_ON_TIMEOUT)
 
-        if should and self.engine.metrics and self.engine.final_metrics:
-            diff_cfg = config.DIFFICULTIES[self.difficulty]
-            self.engine.metrics.save_csv(
-                self.engine.final_metrics,
-                difficulty=diff_cfg.name,
-                level_name=self.engine.level.name,
-                maze_seed=self.engine.level.seed,
-            )
-        self.engine._metrics_saved = True
+        if should:
+            self.engine.save_session_metrics()
 
     def _composite_pip(
         self,
