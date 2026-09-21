@@ -168,6 +168,16 @@ def draw_start_screen(
     draw_text(canvas, sub, ((W - ss[0]) // 2, 145),
               font_scale=0.65, color=(160, 200, 230))
 
+    try:
+        from emg.emg_interface import get_emg_status_string
+        emg_status = get_emg_status_string()
+    except Exception:
+        emg_status = "EMG: Not Connected / Disabled"
+    sensor_info = f"Tracking: Camera (OpenCV)  |  {emg_status}"
+    sis = cv2.getTextSize(sensor_info, cv2.FONT_HERSHEY_SIMPLEX, 0.40, 1)[0]
+    draw_text(canvas, sensor_info, ((W - sis[0]) // 2, 175),
+              font_scale=0.40, color=(125, 150, 175))
+
     # Difficulty buttons
     labels = {
         1: ("1  EASY",   config.EASY),
@@ -442,12 +452,21 @@ def draw_results_screen(
 
     # Status badge
     status_label = "Status: COMPLETED"
-    draw_text(canvas, status_label, (W - 250, 36),
-              font_scale=0.48, color=(90, 220, 140), thickness=1)
+    draw_text(canvas, status_label, (W - 300, 24),
+              font_scale=0.46, color=(90, 220, 140), thickness=1)
 
     # Difficulty badge
-    draw_text(canvas, f"Difficulty: {diff_tag}", (W - 250, 60),
-              font_scale=0.48, color=diff_col, thickness=1)
+    draw_text(canvas, f"Difficulty: {diff_tag}", (W - 300, 44),
+              font_scale=0.46, color=diff_col, thickness=1)
+
+    # EMG sensor status badge (guaranteed to show 'EMG: Not Connected / Disabled' when disabled)
+    try:
+        from emg.emg_interface import get_emg_status_string
+        emg_status_label = get_emg_status_string()
+    except Exception:
+        emg_status_label = "EMG: Not Connected / Disabled"
+    draw_text(canvas, emg_status_label, (W - 300, 64),
+              font_scale=0.40, color=(120, 145, 170), thickness=1)
 
     # ── 3. Layout Grid ───────────────────────────────────────────────────────
     card_top = 78

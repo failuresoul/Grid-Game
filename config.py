@@ -344,3 +344,18 @@ HUD_ACCENT_COLOR: Tuple[int, int, int] = ( 90, 210, 140)  # medical mint accent
 
 WIN_COLOR:  Tuple[int, int, int] = ( 80, 210, 140)  # medical success mint
 FAIL_COLOR: Tuple[int, int, int] = ( 70,  70, 225)  # soft alert red
+
+
+# =============================================================================
+#  13. EMG Hardware Configuration (Future Integration)
+# =============================================================================
+# IMPORTANT:
+# EMG_ENABLED = False remains the default in Section 1 above.
+# The game runs perfectly without any EMG hardware (camera hand tracking).
+# Do not fake EMG measurements.
+EMG_PORT:          str               = "COM3"       # Serial/virtual port ("COM3", "/dev/ttyUSB0")
+EMG_DEVICE:        str               = "bitalino"   # Device type: "bitalino", "myo", "custom_serial", "lsl"
+EMG_SAMPLE_RATE:   int               = 1000         # Acquisition sampling rate in Hz
+EMG_CHANNELS:      Tuple[int, ...]   = (0,)         # Active sensor channel indices
+EMG_MVC_REFERENCE: float             = 512.0        # Reference amplitude for maximum voluntary contraction
+

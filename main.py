@@ -95,8 +95,16 @@ class RehabGame:
         self.history_page: int = 0
         self.history_sessions: list = []
 
-        # ── EMG (disabled) ────────────────────────────────────────────────────
-        self.emg = None
+        # ── EMG Sensor (Future Integration) ──────────────────────────────────
+        # Default: config.EMG_ENABLED = False.
+        # No hardware required; game runs completely with camera hand tracking.
+        # When physical hardware is connected in the future, set config.EMG_ENABLED = True.
+        if getattr(config, "EMG_ENABLED", False):
+            from emg.emg_interface import EMGInterface, initialize_emg
+            self.emg = EMGInterface()
+            initialize_emg()
+        else:
+            self.emg = None
 
     @property
     def _start_screen(self) -> bool:
@@ -589,8 +597,12 @@ class RehabGame:
             self.cap.release()
         if self.tracker:
             self.tracker.close()
-        # if self.emg:
-        #     self.emg.disconnect()
+        if self.emg is not None:
+            try:
+                from emg.emg_interface import close_emg
+                close_emg()
+            except Exception as err:
+                log.warning(f"Error during EMG cleanup: {err}")
         cv2.destroyAllWindows()
 
 

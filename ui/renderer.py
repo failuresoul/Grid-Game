@@ -380,6 +380,15 @@ class Renderer:
         draw_text(canvas, diff_name, (20 + ds[0], 56),
                   font_scale=0.52, color=diff_color, thickness=2)
 
+        # EMG Sensor Status Indicator (shows 'EMG: Not Connected / Disabled' when disabled)
+        try:
+            from emg.emg_interface import get_emg_status_string
+            emg_hud_text = get_emg_status_string()
+        except Exception:
+            emg_hud_text = "EMG: Not Connected / Disabled"
+        draw_text(canvas, emg_hud_text, (20, 78),
+                  font_scale=0.40, color=(120, 145, 170), thickness=1)
+
         # ── 2. Top-Right Telemetry Card ──────────────────────────────────────
         # Format metrics exactly as specified:
         # Time: 00.0 s
@@ -450,7 +459,7 @@ class Renderer:
         algo_name: str,
     ) -> None:
         """Render real-time telemetry overlay showing Raw vs. Smoothed coordinates and optimal path."""
-        bx, by, bw, bh = 12, 82, 245, 126
+        bx, by, bw, bh = 12, 94, 245, 126
         overlay = canvas.copy()
         cv2.rectangle(overlay, (bx, by), (bx + bw, by + bh), (15, 20, 30), -1)
         cv2.addWeighted(overlay, 0.78, canvas, 0.22, 0, canvas)
