@@ -134,7 +134,7 @@ class RehabGame:
     def _new_game(self) -> None:
         diff_cfg = config.DIFFICULTIES[self.difficulty]
         level    = self.maze_gen.get_level(self.difficulty, self.level_index)
-        metrics  = MetricsCollector(start=level.start, end=level.end)
+        metrics  = MetricsCollector(start=level.start, end=level.end, min_path_distance=level.min_path_distance)
         self.engine = GameEngine(level=level, difficulty_cfg=diff_cfg,
                                  metrics_collector=metrics)
         if self.tracker:

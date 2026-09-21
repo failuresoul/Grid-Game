@@ -107,8 +107,9 @@ class Renderer:
         canvas = self._bg.copy()
         level  = engine.level
 
-        if engine.difficulty_cfg.show_path_hint:
-            self._draw_hint_path(canvas, level)
+        # Minimum path displayed visually strictly in debug mode
+        if debug_mode:
+            self._draw_minimum_path(canvas, level)
 
         self._draw_walls(canvas, level)
         self._draw_trail(canvas, engine.trail)
@@ -225,23 +226,38 @@ class Renderer:
         draw_text(canvas, el, (ec[0] - elw[0] // 2, ec[1] + er + pulse + 22),
                   font_scale=0.45, color=config.END_COLOR)
 
-    def _draw_hint_path(self, canvas: np.ndarray, level) -> None:
+    def _draw_minimum_path(self, canvas: np.ndarray, level) -> None:
+        """Render the collision-free minimum path with waypoints strictly in debug mode."""
         pts = level.optimal_waypoints if getattr(level, "optimal_waypoints", None) else [level.start, level.end]
         if len(pts) < 2:
             return
-        for seg_idx in range(len(pts) - 1):
-            sx, sy = pts[seg_idx]
-            ex, ey = pts[seg_idx + 1]
-            seg_dist = math.dist((sx, sy), (ex, ey))
-            if seg_dist < 1:
-                continue
-            steps = max(1, int(seg_dist // 25))
-            for i in range(steps):
-                t1 = i / steps
-                t2 = (i + 0.5) / steps
-                p1 = (int(sx + (ex - sx) * t1), int(sy + (ey - sy) * t1))
-                p2 = (int(sx + (ex - sx) * t2), int(sy + (ey - sy) * t2))
-                cv2.line(canvas, p1, p2, (50, 120, 60), 2, cv2.LINE_AA)
+
+        # 1. Draw glowing connecting lines
+        overlay = canvas.copy()
+        for i in range(len(pts) - 1):
+            p1 = (int(round(pts[i][0])), int(round(pts[i][1])))
+            p2 = (int(round(pts[i + 1][0])), int(round(pts[i + 1][1])))
+            cv2.line(overlay, p1, p2, (0, 240, 180), 3, cv2.LINE_AA)
+            cv2.line(canvas, p1, p2, (50, 180, 255), 1, cv2.LINE_AA)
+        cv2.addWeighted(overlay, 0.45, canvas, 0.55, 0, canvas)
+
+        # 2. Draw waypoint nodes (direction changes)
+        for idx, pt in enumerate(pts):
+            c_pt = (int(round(pt[0])), int(round(pt[1])))
+            if idx == 0 or idx == len(pts) - 1:
+                cv2.circle(canvas, c_pt, 5, (0, 255, 120), -1, cv2.LINE_AA)
+                cv2.circle(canvas, c_pt, 8, (255, 255, 255), 1, cv2.LINE_AA)
+            else:
+                cv2.circle(canvas, c_pt, 4, (0, 220, 255), -1, cv2.LINE_AA)
+                cv2.circle(canvas, c_pt, 7, (0, 180, 220), 1, cv2.LINE_AA)
+
+        # 3. Label along path
+        if len(pts) >= 2:
+            mid_pt = pts[len(pts) // 2]
+            label = f"MIN PATH: {getattr(level, 'min_path_distance', 0.0):.1f} px ({len(pts)} pts)"
+            lx = max(20, min(self.W - 250, int(round(mid_pt[0])) + 12))
+            ly = max(30, min(self.H - 30, int(round(mid_pt[1])) - 12))
+            draw_text(canvas, label, (lx, ly), font_scale=0.38, color=(0, 255, 200), thickness=1)
 
 
     def _draw_player(self, canvas: np.ndarray, engine: "GameEngine") -> None:
@@ -323,8 +339,8 @@ class Renderer:
         raw_coords: Optional[Tuple[float, float]],
         algo_name: str,
     ) -> None:
-        """Render real-time telemetry overlay showing Raw vs. Smoothed coordinates."""
-        bx, by, bw, bh = 12, 82, 230, 94
+        """Render real-time telemetry overlay showing Raw vs. Smoothed coordinates and optimal path."""
+        bx, by, bw, bh = 12, 82, 245, 110
         overlay = canvas.copy()
         cv2.rectangle(overlay, (bx, by), (bx + bw, by + bh), (15, 20, 30), -1)
         cv2.addWeighted(overlay, 0.78, canvas, 0.22, 0, canvas)
@@ -343,16 +359,22 @@ class Renderer:
         smooth_str = f"SMOOTH: X={px:5.1f}  Y={py:5.1f}"
         filter_str = f"FILTER: {algo_name or 'ONE_EURO'}"
 
-        draw_text(canvas, "[DEBUG COORDINATES]", (bx + 8, by + 18),
+        pts = getattr(engine.level, "optimal_waypoints", [])
+        min_p = getattr(engine.level, "min_path_distance", 0.0)
+        path_str = f"PATH:   D={min_p:.1f}px ({len(pts)} pts)"
+
+        draw_text(canvas, "[DEBUG TELEMETRY]", (bx + 8, by + 18),
                   font_scale=0.42, color=(0, 255, 180), thickness=1)
-        draw_text(canvas, raw_str, (bx + 8, by + 36),
-                  font_scale=0.38, color=(60, 220, 255))
-        draw_text(canvas, smooth_str, (bx + 8, by + 54),
-                  font_scale=0.38, color=(80, 255, 120))
-        draw_text(canvas, jit_str, (bx + 8, by + 72),
-                  font_scale=0.38, color=(240, 240, 255))
-        draw_text(canvas, filter_str, (bx + 8, by + 88),
-                  font_scale=0.35, color=(160, 160, 220))
+        draw_text(canvas, raw_str, (bx + 8, by + 34),
+                  font_scale=0.36, color=(60, 220, 255))
+        draw_text(canvas, smooth_str, (bx + 8, by + 50),
+                  font_scale=0.36, color=(80, 255, 120))
+        draw_text(canvas, jit_str, (bx + 8, by + 66),
+                  font_scale=0.36, color=(240, 240, 255))
+        draw_text(canvas, path_str, (bx + 8, by + 82),
+                  font_scale=0.36, color=(0, 240, 200))
+        draw_text(canvas, filter_str, (bx + 8, by + 98),
+                  font_scale=0.33, color=(160, 160, 220))
 
         # Canvas visual marker: draw raw crosshair and connecting line to smoothed player
         if raw_coords is not None:

@@ -59,9 +59,11 @@ class MetricsCollector:
         self,
         start: Tuple[int, int],
         end:   Tuple[int, int],
+        min_path_distance: Optional[float] = None,
     ) -> None:
         self.start = start
         self.end   = end
+        self.min_path_distance = min_path_distance
 
         self._xs: List[float] = []
         self._ys: List[float] = []
@@ -138,7 +140,8 @@ class MetricsCollector:
         # ── Spatial ───────────────────────────────────────────────────────────
         plen = path_length(xs, ys)
         idist = ideal_distance(self.start, self.end)
-        eff   = path_efficiency(xs, ys, self.start, self.end)
+        min_p = self.min_path_distance if (self.min_path_distance is not None and self.min_path_distance > 0.0) else idist
+        eff   = path_efficiency(xs, ys, self.start, self.end, min_path=min_p)
         rom_w, rom_h = rom_dimensions(xs, ys)
 
         # ── Speed ─────────────────────────────────────────────────────────────
@@ -151,15 +154,16 @@ class MetricsCollector:
         tremor = tremor_index(xs, ys, ts)
 
         result.update({
-            "path_length_px":    round(plen,       1),
-            "ideal_distance_px": round(idist,      1),
-            "path_efficiency":   round(eff,         4),
-            "peak_speed_px_s":   round(peak_speed, 1),
-            "mean_speed_px_s":   round(mean_speed, 1),
-            "normalised_jerk":   round(njs,         4),
-            "tremor_index":      round(tremor,      4),
-            "rom_width_px":      round(rom_w,       1),
-            "rom_height_px":     round(rom_h,       1),
+            "path_length_px":       round(plen,       1),
+            "ideal_distance_px":    round(idist,      1),
+            "min_path_distance_px": round(min_p,      1),
+            "path_efficiency":      round(eff,         4),
+            "peak_speed_px_s":      round(peak_speed, 1),
+            "mean_speed_px_s":      round(mean_speed, 1),
+            "normalised_jerk":      round(njs,         4),
+            "tremor_index":         round(tremor,      4),
+            "rom_width_px":         round(rom_w,       1),
+            "rom_height_px":        round(rom_h,       1),
         })
         return result
 

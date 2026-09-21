@@ -172,8 +172,40 @@ class Level:
     optimal_waypoints: List[Tuple[float, float]] = field(default_factory=list)
     min_path_distance: float = 0.0
 
+    def compute_minimum_path(self, player_radius: Optional[float] = None) -> float:
+        """
+        Compute the shortest collision-free route from START to END considering player radius
+        and obstacles, store in optimal_waypoints and min_path_distance, and return min_path_distance.
+        """
+        from game.pathfinding import calculate_minimum_path
+        if player_radius is None:
+            tag = (self.difficulty_tag or "").upper()
+            if tag == "EASY":
+                pr = float(config.DIFFICULTIES[1].player_radius)
+            elif tag == "MEDIUM":
+                pr = float(config.DIFFICULTIES[2].player_radius)
+            elif tag == "HARD":
+                pr = float(config.DIFFICULTIES[3].player_radius)
+            else:
+                pr = float(getattr(config, "PLAYER_RADIUS", 16.0))
+        else:
+            pr = float(player_radius)
+
+        dist, waypoints = calculate_minimum_path(
+            start=self.start,
+            end=self.end,
+            obstacles=self.walls,
+            player_radius=pr,
+            width=self.width,
+            height=self.height,
+        )
+        if waypoints:
+            self.optimal_waypoints = waypoints
+            self.min_path_distance = dist
+        return self.min_path_distance
+
     def __post_init__(self):
-        if not self.optimal_waypoints:
+        if not self.optimal_waypoints or len(self.optimal_waypoints) < 2:
             self.optimal_waypoints = [
                 (float(self.start[0]), float(self.start[1])),
                 (float(self.end[0]), float(self.end[1])),
@@ -525,7 +557,7 @@ class MazeBuilder:
 
     def build(self) -> Level:
         """Construct and return the finalized continuous 2D Level."""
-        return Level(
+        lvl = Level(
             walls=list(self.obstacles),
             start=self.start,
             end=self.end,
@@ -540,6 +572,10 @@ class MazeBuilder:
             optimal_waypoints=list(self.optimal_waypoints),
             min_path_distance=self.min_path_distance,
         )
+        # If waypoints were not explicitly defined and obstacles exist, compute optimal path
+        if (not self.optimal_waypoints or len(self.optimal_waypoints) <= 2) and self.obstacles:
+            lvl.compute_minimum_path()
+        return lvl
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -638,6 +674,7 @@ def conceptual_level(W: int = config.CANVAS_WIDTH, H: int = config.CANVAS_HEIGHT
     """
     t = config.WALL_THICKNESS
     builder = MazeBuilder("Conceptual Rehab Maze", width=W, height=H)
+    builder.set_difficulty_tag("EASY")
     builder.set_description("Navigate from outside START through the entrance, around the obstacle to END.")
 
     # 1. START point: located in open space outside the enclosure (top-left)
@@ -711,6 +748,7 @@ def easy_levels(W: int, H: int) -> List[Level]:
 
     # ── Easy-3: Three Rooms ───────────────────────────────────────────────────
     b2 = MazeBuilder("Easy-3: Three Rooms", width=W, height=H)
+    b2.set_difficulty_tag("EASY")
     b2.set_start(margin + 40, H - margin - 30)
     b2.set_end(W - margin - 40, margin + 30)
     b2.add_rect(margin, H // 3, W // 2 - 80, t)
@@ -720,6 +758,7 @@ def easy_levels(W: int, H: int) -> List[Level]:
 
     # ── Easy-4: S-Curve Corridor ──────────────────────────────────────────────
     b3 = MazeBuilder("Easy-4: S-Curve", width=W, height=H)
+    b3.set_difficulty_tag("EASY")
     b3.set_start(margin + 40, H - margin - 30)
     b3.set_end(W - margin - 40, margin + 30)
     b3.add_rect(margin, H // 3, W * 2 // 3, t)
@@ -728,6 +767,7 @@ def easy_levels(W: int, H: int) -> List[Level]:
 
     # ── Easy-5: Central Island ────────────────────────────────────────────────
     b4 = MazeBuilder("Easy-5: Island", width=W, height=H)
+    b4.set_difficulty_tag("EASY")
     b4.set_start(margin + 40, H - margin - 30)
     b4.set_end(W - margin - 40, margin + 30)
     b4.add_rect(W // 2 - 90, H // 2 - 70, 180, 140)
