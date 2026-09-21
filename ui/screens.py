@@ -324,85 +324,337 @@ def draw_paused_overlay(canvas: np.ndarray, W: int, H: int) -> None:
               font_scale=0.50, color=(140, 175, 210))
 
 
-def draw_win_overlay(
-    canvas:      np.ndarray,
-    W: int, H:   int,
-    anim_t:      float,
-    final_metrics: dict,
-    wall_hits:   int,
-    elapsed:     float,
-) -> None:
-    """Professional medical/research prototype clinical session results summary."""
-    m = final_metrics
+def get_results_button_rects(W: int = 800, H: int = 600) -> List[Tuple[str, Tuple[int, int, int, int], str, str]]:
+    """
+    Returns list of (button_id, (bx, by, bw, bh), label, key_shortcut) for the results screen:
+        1. PLAY AGAIN   [R]
+        2. NEXT LEVEL   [N]
+        3. LEVEL SELECT [L]
+        4. MAIN MENU    [M]
+        5. EXIT         [ESC]
+    """
+    btn_defs = [
+        ("PLAY_AGAIN",   "PLAY AGAIN",   "R"),
+        ("NEXT_LEVEL",   "NEXT LEVEL",   "N"),
+        ("LEVEL_SELECT", "LEVEL SELECT", "L"),
+        ("MAIN_MENU",    "MAIN MENU",    "M"),
+        ("EXIT",         "EXIT",         "ESC"),
+    ]
+    margin = 20
+    available_w = W - 2 * margin
+    n = len(btn_defs)
+    gap = 12
+    bw = (available_w - (n - 1) * gap) // n
+    bh = 42
+    by = H - 54
+
+    result = []
+    for i, (b_id, label, key) in enumerate(btn_defs):
+        bx = margin + i * (bw + gap)
+        result.append((b_id, (bx, by, bw, bh), label, key))
+    return result
+
+
+def draw_results_screen(
+    canvas:          np.ndarray,
+    W: int, H:       int,
+    anim_t:          float = 0.0,
+    final_metrics:   dict = None,
+    wall_hits:       int = 0,
+    elapsed:         float = 0.0,
+    level:           Optional[Any] = None,
+    trajectory:      Optional[List[Tuple[float, float]]] = None,
+    difficulty_name: str = "EASY",
+    mouse_pos:       Optional[Tuple[float, float]] = None,
+) -> List[Tuple[str, Tuple[int, int, int, int], str, str]]:
+    """
+    Professional results screen after completing a maze:
+    - Header: REHABILITATION RESULTS (Difficulty, Completion Status)
+    - Left Card: Game Performance Metrics (Time, Actual Dist, Min Dist, Efficiency, Accuracy, Smoothness, Collisions, Deviations)
+    - Right Card: Trajectory Visualization (Optimal/Minimum path vs. Patient actual trajectory)
+    - Bottom Buttons: PLAY AGAIN, NEXT LEVEL, LEVEL SELECT, MAIN MENU, EXIT
+    - Clear non-diagnostic framing: 'Game Performance Metrics' (not a medical diagnosis)
+    """
+    m = final_metrics or {}
     raw_eff = m.get("path_efficiency", 0.0)
     eff_pct = raw_eff * 100.0 if 0.0 < raw_eff <= 1.0 else raw_eff
 
     min_dist = m.get("minimum_distance", m.get("min_path_distance_px", 0.0))
     act_dist = m.get("actual_distance", m.get("actual_distance_px", 0.0))
-    traj_acc = m.get("trajectory_accuracy", 0.0)
+    traj_acc = m.get("trajectory_accuracy", 100.0 if not m else 0.0)
     mean_dev = m.get("mean_path_deviation_px", 0.0)
     dev_events = m.get("deviation_events", 0)
+    smoothness = m.get("smoothness_score", 100.0)
     t_outside = m.get("time_outside_route_s", 0.0)
+    compl_time = m.get("completion_time_s", elapsed)
 
-    rows = [
-        # 1. Accuracy Dimension
-        ("Trajectory accuracy", f"{traj_acc:.1f}%"),
-        ("Mean path deviation", f"{mean_dev:.1f} px"),
-        ("Deviation events",    str(dev_events)),
-        # 2. Path Efficiency Dimension
-        ("Path efficiency",     f"{eff_pct:.1f}%"),
-        # 3. Distance Dimension
-        ("Minimum path",        f"{min_dist:.1f} px"),
-        ("Actual distance",     f"{act_dist:.1f} px"),
-        # 4. Collision Count Dimension
-        ("Wall collisions",     str(wall_hits)),
-        # 5. Time Dimension
-        ("Completion time",     f"{m.get('completion_time_s', elapsed):.2f} s"),
-        ("Time outside route",  f"{t_outside:.2f} s"),
-        # Smoothness & Kinematics
-        ("Game smoothness",     f"{m.get('smoothness_score', 100.0):.1f}/100"),
-        ("Norm. jerk score",    f"{m.get('normalised_jerk', 0):.2f}"),
-        ("Tremor index",        f"{m.get('tremor_index', 0) * 100:.1f}%"),
-    ]
-
-    bw, bh = 490, 420
-    bx, by = (W - bw) // 2, (H - bh) // 2 - 10
-
+    # ── 1. Semi-translucent dark slate backdrop ──────────────────────────────
     overlay = canvas.copy()
-    cv2.rectangle(overlay, (bx, by), (bx + bw, by + bh), (16, 20, 28), -1)
-    cv2.addWeighted(overlay, 0.90, canvas, 0.10, 0, canvas)
-    cv2.rectangle(canvas, (bx, by), (bx + bw, by + bh), (65, 110, 85), 1, cv2.LINE_AA)
+    cv2.rectangle(overlay, (0, 0), (W, H), (14, 17, 23), -1)
+    cv2.addWeighted(overlay, 0.94, canvas, 0.06, 0, canvas)
 
-    # Header
-    title = "REHABILITATION SESSION COMPLETE"
-    ts = cv2.getTextSize(title, cv2.FONT_HERSHEY_SIMPLEX, 0.72, 2)[0]
-    draw_text(canvas, title, (bx + (bw - ts[0]) // 2, by + 34),
-              font_scale=0.72, color=(240, 250, 245), thickness=2)
+    # ── 2. Header Bar: Title, Subtitle & Badges ──────────────────────────────
+    draw_text(canvas, "REHABILITATION RESULTS", (24, 38),
+              font_scale=0.82, color=(245, 250, 255), thickness=2)
+    draw_text(canvas, "Game Performance Metrics", (24, 62),
+              font_scale=0.48, color=(120, 210, 160), thickness=1)
 
-    sub = "Target Reached - Clinical Movement Evaluation"
-    ss = cv2.getTextSize(sub, cv2.FONT_HERSHEY_SIMPLEX, 0.44, 1)[0]
-    draw_text(canvas, sub, (bx + (bw - ss[0]) // 2, by + 58),
-              font_scale=0.44, color=(130, 200, 160))
+    # Status & Difficulty Badges (Top Right)
+    diff_tag = difficulty_name.upper()
+    if "EASY" in diff_tag:
+        diff_col = (100, 215, 140)
+    elif "HARD" in diff_tag:
+        diff_col = (90, 100, 245)
+    else:
+        diff_col = (60, 190, 250)
+
+    # Status badge
+    status_label = "Status: COMPLETED"
+    draw_text(canvas, status_label, (W - 250, 36),
+              font_scale=0.48, color=(90, 220, 140), thickness=1)
+
+    # Difficulty badge
+    draw_text(canvas, f"Difficulty: {diff_tag}", (W - 250, 60),
+              font_scale=0.48, color=diff_col, thickness=1)
+
+    # ── 3. Layout Grid ───────────────────────────────────────────────────────
+    card_top = 78
+    card_bot = H - 68
+    card_h = card_bot - card_top
+    card_gap = 18
+    card_w = (W - 2 * 20 - card_gap) // 2
+
+    c1_x = 20
+    c2_x = c1_x + card_w + card_gap
+
+    # ─────────────────────────────────────────────────────────────────────────
+    #  LEFT CARD: Game Performance Metrics
+    # ─────────────────────────────────────────────────────────────────────────
+    # Card container
+    cv2.rectangle(canvas, (c1_x, card_top), (c1_x + card_w, card_top + card_h),
+                  (18, 22, 30), -1)
+    cv2.rectangle(canvas, (c1_x, card_top), (c1_x + card_w, card_top + card_h),
+                  (55, 75, 95), 1, cv2.LINE_AA)
+
+    # Card Title
+    draw_text(canvas, "GAME PERFORMANCE METRICS", (c1_x + 16, card_top + 26),
+              font_scale=0.52, color=(140, 195, 240), thickness=2)
+
+    # Subtitle note
+    draw_text(canvas, "Session Kinematics & Corridor Adherence", (c1_x + 16, card_top + 46),
+              font_scale=0.38, color=(120, 145, 170))
 
     # Divider line
-    cv2.line(canvas, (bx + 20, by + 72), (bx + bw - 20, by + 72), (45, 65, 55), 1, cv2.LINE_AA)
+    cv2.line(canvas, (c1_x + 16, card_top + 56), (c1_x + card_w - 16, card_top + 56),
+             (45, 60, 75), 1, cv2.LINE_AA)
 
-    # Metrics Table
-    row_h = 24
-    table_top = by + 94
-    for i, (label, val) in enumerate(rows):
-        ry = table_top + i * row_h
-        draw_text(canvas, label, (bx + 26, ry),
-                  font_scale=0.46, color=(145, 170, 195))
+    # Formatted Metric Rows
+    metric_rows = [
+        ("Completion Time",        f"{compl_time:.2f} s"),
+        ("Actual Distance",        f"{act_dist:.1f} px"),
+        ("Minimum Distance",       f"{min_dist:.1f} px"),
+        ("Path Efficiency",        f"{eff_pct:.1f}%"),
+        ("Accuracy",               f"{traj_acc:.1f}%"),
+        ("Movement Smoothness",    f"{smoothness:.1f}/100"),
+        ("Wall Collisions",        str(wall_hits)),
+        ("Wrong/Deviation Events", str(dev_events)),
+        # Secondary Kinematic Reference
+        ("Mean Path Deviation",    f"{mean_dev:.1f} px"),
+        ("Time Outside Route",     f"{t_outside:.2f} s"),
+    ]
+
+    row_start_y = card_top + 80
+    row_h = 28
+    for i, (label, val) in enumerate(metric_rows):
+        ry = row_start_y + i * row_h
+        # Alternating subtle row band
+        if i % 2 == 1:
+            overlay_row = canvas.copy()
+            cv2.rectangle(overlay_row, (c1_x + 12, ry - 18), (c1_x + card_w - 12, ry + 6),
+                          (24, 30, 40), -1)
+            cv2.addWeighted(overlay_row, 0.45, canvas, 0.55, 0, canvas)
+
+        draw_text(canvas, label, (c1_x + 18, ry),
+                  font_scale=0.45, color=(145, 170, 195))
         vs = cv2.getTextSize(val, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 1)[0]
-        draw_text(canvas, val, (bx + bw - 26 - vs[0], ry),
-                  font_scale=0.48, color=(235, 245, 250), thickness=1)
+        draw_text(canvas, val, (c1_x + card_w - 18 - vs[0], ry),
+                  font_scale=0.48, color=(240, 248, 255), thickness=1)
 
-    # Footer navigation
-    hint = "Press R to restart  |  N for next level  |  M for menu  |  ESC to quit"
-    hs = cv2.getTextSize(hint, cv2.FONT_HERSHEY_SIMPLEX, 0.46, 1)[0]
-    draw_text(canvas, hint, ((W - hs[0]) // 2, H - 25),
-              font_scale=0.46, color=(130, 165, 150))
+    # Non-diagnostic disclaimer footnote at bottom of left card
+    footnote_y = card_top + card_h - 24
+    draw_text(canvas, "* Evaluates game movement performance only.",
+              (c1_x + 16, footnote_y - 12), font_scale=0.34, color=(105, 125, 145))
+    draw_text(canvas, "* Not a medical diagnosis or recovery assessment.",
+              (c1_x + 16, footnote_y + 4), font_scale=0.34, color=(105, 125, 145))
+
+    # ─────────────────────────────────────────────────────────────────────────
+    #  RIGHT CARD: Trajectory Visualization (Optimal vs. Patient Path)
+    # ─────────────────────────────────────────────────────────────────────────
+    cv2.rectangle(canvas, (c2_x, card_top), (c2_x + card_w, card_top + card_h),
+                  (18, 22, 30), -1)
+    cv2.rectangle(canvas, (c2_x, card_top), (c2_x + card_w, card_top + card_h),
+                  (55, 75, 95), 1, cv2.LINE_AA)
+
+    # Card Title
+    draw_text(canvas, "TRAJECTORY VISUALIZATION", (c2_x + 16, card_top + 26),
+              font_scale=0.52, color=(140, 195, 240), thickness=2)
+
+    # Subtitle / Route comparison legend
+    draw_text(canvas, "Route Comparison: Optimal vs. Actual", (c2_x + 16, card_top + 46),
+              font_scale=0.38, color=(120, 145, 170))
+
+    cv2.line(canvas, (c2_x + 16, card_top + 56), (c2_x + card_w - 16, card_top + 56),
+             (45, 60, 75), 1, cv2.LINE_AA)
+
+    # Legend indicator chips
+    # 1. Optimal path legend
+    cv2.line(canvas, (c2_x + 20, card_top + 72), (c2_x + 40, card_top + 72), (0, 230, 150), 2, cv2.LINE_AA)
+    cv2.circle(canvas, (c2_x + 30, card_top + 72), 3, (0, 230, 150), -1, cv2.LINE_AA)
+    draw_text(canvas, "Optimal Route", (c2_x + 46, card_top + 75),
+              font_scale=0.40, color=(160, 230, 190))
+
+    # 2. Patient path legend
+    cv2.line(canvas, (c2_x + 185, card_top + 72), (c2_x + 210, card_top + 72), (220, 185, 85), 2, cv2.LINE_AA)
+    draw_text(canvas, "Patient Trajectory", (c2_x + 216, card_top + 75),
+              font_scale=0.40, color=(220, 205, 160))
+
+    # Viewport container box
+    vx = c2_x + 14
+    vy = card_top + 88
+    vw = card_w - 28
+    vh = card_h - 106
+
+    cv2.rectangle(canvas, (vx, vy), (vx + vw, vy + vh), (11, 14, 18), -1)
+    cv2.rectangle(canvas, (vx, vy), (vx + vw, vy + vh), (45, 58, 72), 1, cv2.LINE_AA)
+
+    # Scale level geometry and trajectories into viewport
+    if level is not None:
+        orig_w = float(getattr(level, "width", 800))
+        orig_h = float(getattr(level, "height", 600))
+        pad = 12
+        scale = min((vw - 2 * pad) / orig_w, (vh - 2 * pad) / orig_h)
+        ox = vx + (vw - orig_w * scale) / 2.0
+        oy = vy + (vh - orig_h * scale) / 2.0
+
+        def tx(px: float, py: float) -> Tuple[int, int]:
+            return int(round(ox + float(px) * scale)), int(round(oy + float(py) * scale))
+
+        # 1. Draw obstacles
+        walls = getattr(level, "walls", [])
+        for obs in walls:
+            if hasattr(obs, "is_polygon") and obs.is_polygon:
+                pts_t = np.array([tx(p[0], p[1]) for p in obs.points], dtype=np.int32).reshape((-1, 1, 2))
+                cv2.fillPoly(canvas, [pts_t], color=(38, 44, 54), lineType=cv2.LINE_AA)
+                cv2.polylines(canvas, [pts_t], True, (70, 90, 115), 1, cv2.LINE_AA)
+            else:
+                if hasattr(obs, "as_rect"):
+                    rx, ry, rw, rh = obs.as_rect()
+                elif isinstance(obs, (tuple, list)) and len(obs) == 4:
+                    rx, ry, rw, rh = obs
+                else:
+                    rx, ry, rw, rh = obs.x, obs.y, obs.w, obs.h
+                p1 = tx(rx, ry)
+                p2 = tx(rx + rw, ry + rh)
+                cv2.rectangle(canvas, p1, p2, (38, 44, 54), -1, cv2.LINE_AA)
+                cv2.rectangle(canvas, p1, p2, (70, 90, 115), 1, cv2.LINE_AA)
+
+        # 2. Draw Optimal / Minimum Path
+        wps = getattr(level, "optimal_waypoints", None) or [level.start, level.end]
+        if len(wps) >= 2:
+            for i in range(len(wps) - 1):
+                p1 = tx(wps[i][0], wps[i][1])
+                p2 = tx(wps[i + 1][0], wps[i + 1][1])
+                cv2.line(canvas, p1, p2, (0, 230, 150), 2, cv2.LINE_AA)
+            for pt in wps:
+                c_pt = tx(pt[0], pt[1])
+                cv2.circle(canvas, c_pt, 3, (0, 230, 150), -1, cv2.LINE_AA)
+
+        # 3. Draw Patient Actual Trajectory
+        traj = trajectory or []
+        if len(traj) >= 2:
+            for i in range(len(traj) - 1):
+                p1 = tx(traj[i][0], traj[i][1])
+                p2 = tx(traj[i + 1][0], traj[i + 1][1])
+                cv2.line(canvas, p1, p2, (220, 185, 85), 2, cv2.LINE_AA)
+
+        # 4. Start Point Beacon
+        sp = tx(level.start[0], level.start[1])
+        cv2.circle(canvas, sp, 7, (70, 195, 110), -1, cv2.LINE_AA)
+        cv2.circle(canvas, sp, 7, (180, 245, 205), 1, cv2.LINE_AA)
+        cv2.circle(canvas, sp, 2, (255, 255, 255), -1, cv2.LINE_AA)
+        draw_text(canvas, "START", (sp[0] - 14, sp[1] + 16),
+                  font_scale=0.34, color=(160, 220, 180))
+
+        # 5. End Target Bullseye
+        ep = tx(level.end[0], level.end[1])
+        cv2.circle(canvas, ep, 7, (60, 185, 240), 2, cv2.LINE_AA)
+        cv2.circle(canvas, ep, 4, (220, 240, 255), 1, cv2.LINE_AA)
+        cv2.circle(canvas, ep, 2, (60, 185, 240), -1, cv2.LINE_AA)
+        draw_text(canvas, "END", (ep[0] - 10, ep[1] + 16),
+                  font_scale=0.34, color=(140, 210, 255))
+    else:
+        # Fallback if level geometry not passed
+        draw_text(canvas, "Optimal vs. Patient Trajectory", (vx + 45, vy + vh // 2 - 10),
+                  font_scale=0.48, color=(140, 175, 205))
+        draw_text(canvas, "Trajectory map loaded during active maze session", (vx + 20, vy + vh // 2 + 15),
+                  font_scale=0.38, color=(100, 130, 160))
+
+    # ── 4. Bottom Action Buttons: PLAY AGAIN, NEXT LEVEL, LEVEL SELECT, MAIN MENU, EXIT ──
+    button_rects = get_results_button_rects(W, H)
+    for b_id, (bx, by, bw, bh), label, key in button_rects:
+        # Hover detection
+        is_hover = False
+        if mouse_pos is not None:
+            mx, my = mouse_pos
+            if bx <= mx <= bx + bw and by <= my <= by + bh:
+                is_hover = True
+
+        bg_col = (35, 48, 64) if is_hover else (22, 28, 38)
+        border_col = (100, 225, 170) if is_hover else (65, 88, 115)
+        txt_col = (255, 255, 255) if is_hover else (230, 240, 250)
+
+        # Button card
+        cv2.rectangle(canvas, (bx, by), (bx + bw, by + bh), bg_col, -1)
+        cv2.rectangle(canvas, (bx, by), (bx + bw, by + bh), border_col, 1, cv2.LINE_AA)
+
+        # Text with keyboard shortcut badge
+        full_text = f"{label} [{key}]"
+        ts = cv2.getTextSize(full_text, cv2.FONT_HERSHEY_SIMPLEX, 0.44, 1)[0]
+        tx_pos = bx + (bw - ts[0]) // 2
+        ty_pos = by + (bh + ts[1]) // 2
+        draw_text(canvas, full_text, (tx_pos, ty_pos),
+                  font_scale=0.44, color=txt_col, thickness=1, shadow=False)
+
+    return button_rects
+
+
+# Backward-compatible alias so existing callers seamlessly route to draw_results_screen
+def draw_win_overlay(
+    canvas:        np.ndarray,
+    W: int, H:     int,
+    anim_t:        float = 0.0,
+    final_metrics: dict = None,
+    wall_hits:     int = 0,
+    elapsed:       float = 0.0,
+    level:         Optional[Any] = None,
+    trajectory:    Optional[List[Tuple[float, float]]] = None,
+    difficulty_name: str = "EASY",
+    mouse_pos:     Optional[Tuple[float, float]] = None,
+) -> List[Tuple[str, Tuple[int, int, int, int], str, str]]:
+    """Backward-compatible wrapper routing to the professional draw_results_screen."""
+    return draw_results_screen(
+        canvas=canvas,
+        W=W,
+        H=H,
+        anim_t=anim_t,
+        final_metrics=final_metrics,
+        wall_hits=wall_hits,
+        elapsed=elapsed,
+        level=level,
+        trajectory=trajectory,
+        difficulty_name=difficulty_name,
+        mouse_pos=mouse_pos,
+    )
 
 
 def draw_timeout_overlay(

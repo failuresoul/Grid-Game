@@ -31,6 +31,7 @@ import numpy as np
 import config
 from ui.screens import (
     draw_text, glow_circle, draw_star,
+    draw_start_beacon, draw_target_rings,
     draw_start_screen, draw_level_select_screen,
     draw_waiting_overlay, draw_ready_overlay, draw_paused_overlay,
     draw_win_overlay, draw_timeout_overlay,
@@ -84,6 +85,7 @@ class Renderer:
         raw_coords:        Optional[Tuple[float, float]] = None,
         debug_mode:        bool = False,
         algo_name:         str  = "",
+        mouse_pos:         Optional[Tuple[float, float]] = None,
     ) -> np.ndarray:
         """
         Render a complete gameplay frame.
@@ -115,24 +117,33 @@ class Renderer:
         self._draw_trail(canvas, engine.trail)
         self._draw_start_end(canvas, level)
         self._draw_player(canvas, engine)
-        self._draw_hud(canvas, engine, is_mouse_fallback, landmark_name)
+        # Only render gameplay HUD when active, not during results screen
+        state = engine.state
+        if state not in (GameState.COMPLETED, GameState.RESULTS, GameState.WIN):
+            self._draw_hud(canvas, engine, is_mouse_fallback, landmark_name)
 
         # Real-time telemetry debug overlay (Raw vs. Smoothed X,Y)
         if debug_mode:
             self._draw_debug_overlay(canvas, engine, raw_coords, algo_name)
 
         # State overlays
-        state = engine.state
         if state in (GameState.READY, GameState.WAITING):
             draw_waiting_overlay(canvas, self.W, self.H, self._t)
         elif state == GameState.PAUSED:
             draw_paused_overlay(canvas, self.W, self.H)
         elif state in (GameState.COMPLETED, GameState.RESULTS, GameState.WIN):
             draw_win_overlay(
-                canvas, self.W, self.H, self._t,
-                engine.final_metrics or {},
-                engine.wall_hit_count,
-                engine.elapsed_time,
+                canvas=canvas,
+                W=self.W,
+                H=self.H,
+                anim_t=self._t,
+                final_metrics=engine.final_metrics or {},
+                wall_hits=engine.wall_hit_count,
+                elapsed=engine.elapsed_time,
+                level=engine.level,
+                trajectory=engine.full_trajectory,
+                difficulty_name=getattr(engine.difficulty_cfg, "name", "EASY"),
+                mouse_pos=mouse_pos,
             )
         elif state == GameState.TIMEOUT:
             draw_timeout_overlay(
@@ -180,23 +191,16 @@ class Renderer:
     # ─────────────────────────────────────────────────────────────────────────
 
     def _draw_walls(self, canvas: np.ndarray, level) -> None:
-        bright = tuple(min(255, c + 60) for c in config.WALL_COLOR)
+        """Draw clean, high-contrast geometric architectural obstacles with precision borders."""
         for obs in level.walls:
             if hasattr(obs, "is_polygon") and obs.is_polygon:
-                # Geometric polygon obstacle
                 pts = np.array(obs.points, dtype=np.int32).reshape((-1, 1, 2))
-                # Glow border
-                overlay = canvas.copy()
-                cv2.polylines(overlay, [pts], isClosed=True, color=config.WALL_BORDER_COLOR,
-                              thickness=5, lineType=cv2.LINE_AA)
-                cv2.addWeighted(overlay, 0.5, canvas, 0.5, 0, canvas)
                 # Solid fill
                 cv2.fillPoly(canvas, [pts], color=config.WALL_COLOR, lineType=cv2.LINE_AA)
-                # 3-D highlight bevel outline
-                cv2.polylines(canvas, [pts], isClosed=True, color=bright,
-                              thickness=2, lineType=cv2.LINE_AA)
+                # Precision hairline border
+                cv2.polylines(canvas, [pts], isClosed=True, color=config.WALL_BORDER_COLOR,
+                              thickness=1, lineType=cv2.LINE_AA)
             else:
-                # Geometric rectangle obstacle (RectObstacle, tuple, or duck-typed)
                 if hasattr(obs, "as_rect"):
                     wx, wy, ww, wh = obs.as_rect()
                 elif isinstance(obs, (tuple, list)) and len(obs) == 4:
@@ -204,50 +208,48 @@ class Renderer:
                 else:
                     wx, wy, ww, wh = int(obs.x), int(obs.y), int(obs.w), int(obs.h)
 
-                # Glow border
-                overlay = canvas.copy()
-                cv2.rectangle(overlay, (wx - 3, wy - 3), (wx + ww + 3, wy + wh + 3),
-                              config.WALL_BORDER_COLOR, 3)
-                cv2.addWeighted(overlay, 0.5, canvas, 0.5, 0, canvas)
                 # Solid fill
                 cv2.rectangle(canvas, (wx, wy), (wx + ww, wy + wh),
                               config.WALL_COLOR, -1, cv2.LINE_AA)
-                # 3-D highlight (top & left edges)
-                cv2.line(canvas, (wx, wy),      (wx + ww, wy),      bright, 2, cv2.LINE_AA)
-                cv2.line(canvas, (wx, wy),      (wx, wy + wh),      bright, 2, cv2.LINE_AA)
+                # Precision hairline border
+                cv2.rectangle(canvas, (wx, wy), (wx + ww, wy + wh),
+                              config.WALL_BORDER_COLOR, 1, cv2.LINE_AA)
 
     def _draw_trail(self, canvas: np.ndarray, trail: list) -> None:
+        """Draw smooth continuous trajectory line showing patient movement path."""
         n = len(trail)
         if n < 2:
             return
         for i in range(1, n):
-            alpha     = i / n
-            intensity = int(80 + 120 * alpha)
-            color     = (intensity, intensity + 40, 255)
-            thickness = max(1, int(2 * alpha))
+            alpha = i / n
+            # Subtle gradient from muted slate-blue to clinical sky-blue
+            color = (
+                int(140 + 75 * alpha),
+                int(160 + 20 * alpha),
+                int(190 - 105 * alpha),
+            )
             p1 = (int(round(trail[i - 1][0])), int(round(trail[i - 1][1])))
             p2 = (int(round(trail[i][0])), int(round(trail[i][1])))
-            cv2.line(canvas, p1, p2, color, thickness, cv2.LINE_AA)
+            cv2.line(canvas, p1, p2, color, 2, cv2.LINE_AA)
 
     def _draw_start_end(self, canvas: np.ndarray, level) -> None:
-        # Start zone
+        """Render clinical START beacon and END target bullseye."""
+        # 1. Start point
         sc, sr = level.start, level.start_r
-        cv2.circle(canvas, sc, sr, config.START_COLOR, -1, cv2.LINE_AA)
-        cv2.circle(canvas, sc, sr, (255, 255, 255), 1, cv2.LINE_AA)
+        draw_start_beacon(canvas, sc, sr, config.START_COLOR)
         sl = "START"
-        slw = cv2.getTextSize(sl, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)[0]
-        draw_text(canvas, sl, (sc[0] - slw[0] // 2, sc[1] + sr + 16),
-                  font_scale=0.45, color=config.START_COLOR)
+        slw = cv2.getTextSize(sl, cv2.FONT_HERSHEY_SIMPLEX, 0.42, 1)[0]
+        draw_text(canvas, sl, (sc[0] - slw[0] // 2, sc[1] + sr + 15),
+                  font_scale=0.42, color=(160, 220, 180), thickness=1)
 
-        # End zone — pulsing star
+        # 2. End point (target bullseye with gentle, calm breathing pulse)
         ec, er = level.end, level.end_r
-        pulse  = int(4 * math.sin(self._t * 3) + 4)
-        draw_star(canvas, ec, er + pulse, config.END_COLOR)
-        cv2.circle(canvas, ec, er + pulse + 8, config.END_COLOR, 1, cv2.LINE_AA)
-        el = "GOAL"
-        elw = cv2.getTextSize(el, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)[0]
-        draw_text(canvas, el, (ec[0] - elw[0] // 2, ec[1] + er + pulse + 22),
-                  font_scale=0.45, color=config.END_COLOR)
+        pulse = int(round(1.5 * math.sin(self._t * 2.5)))
+        draw_target_rings(canvas, ec, er, config.END_COLOR, pulse_r=pulse)
+        el = "END"
+        elw = cv2.getTextSize(el, cv2.FONT_HERSHEY_SIMPLEX, 0.42, 1)[0]
+        draw_text(canvas, el, (ec[0] - elw[0] // 2, ec[1] + er + pulse + 17),
+                  font_scale=0.42, color=(140, 210, 255), thickness=1)
 
     def _draw_minimum_path(self, canvas: np.ndarray, level) -> None:
         """Render the collision-free minimum path with waypoints strictly in debug mode."""
@@ -255,57 +257,52 @@ class Renderer:
         if len(pts) < 2:
             return
 
-        # 1. Draw glowing connecting lines
-        overlay = canvas.copy()
+        # Connecting dashed lines
         for i in range(len(pts) - 1):
             p1 = (int(round(pts[i][0])), int(round(pts[i][1])))
             p2 = (int(round(pts[i + 1][0])), int(round(pts[i + 1][1])))
-            cv2.line(overlay, p1, p2, (0, 240, 180), 3, cv2.LINE_AA)
-            cv2.line(canvas, p1, p2, (50, 180, 255), 1, cv2.LINE_AA)
-        cv2.addWeighted(overlay, 0.45, canvas, 0.55, 0, canvas)
+            cv2.line(canvas, p1, p2, (0, 220, 160), 1, cv2.LINE_AA)
 
-        # 2. Draw waypoint nodes (direction changes)
+        # Waypoint nodes
         for idx, pt in enumerate(pts):
             c_pt = (int(round(pt[0])), int(round(pt[1])))
             if idx == 0 or idx == len(pts) - 1:
-                cv2.circle(canvas, c_pt, 5, (0, 255, 120), -1, cv2.LINE_AA)
-                cv2.circle(canvas, c_pt, 8, (255, 255, 255), 1, cv2.LINE_AA)
+                cv2.circle(canvas, c_pt, 4, (0, 255, 120), -1, cv2.LINE_AA)
             else:
-                cv2.circle(canvas, c_pt, 4, (0, 220, 255), -1, cv2.LINE_AA)
-                cv2.circle(canvas, c_pt, 7, (0, 180, 220), 1, cv2.LINE_AA)
+                cv2.circle(canvas, c_pt, 3, (0, 200, 240), -1, cv2.LINE_AA)
 
-        # 3. Label along path
         if len(pts) >= 2:
             mid_pt = pts[len(pts) // 2]
-            label = f"MIN PATH: {getattr(level, 'min_path_distance', 0.0):.1f} px ({len(pts)} pts)"
-            lx = max(20, min(self.W - 250, int(round(mid_pt[0])) + 12))
-            ly = max(30, min(self.H - 30, int(round(mid_pt[1])) - 12))
-            draw_text(canvas, label, (lx, ly), font_scale=0.38, color=(0, 255, 200), thickness=1)
-
+            label = f"MIN PATH: {getattr(level, 'min_path_distance', 0.0):.1f} px"
+            lx = max(20, min(self.W - 200, int(round(mid_pt[0])) + 10))
+            ly = max(30, min(self.H - 30, int(round(mid_pt[1])) - 10))
+            draw_text(canvas, label, (lx, ly), font_scale=0.38, color=(0, 240, 180), thickness=1)
 
     def _draw_player(self, canvas: np.ndarray, engine: "GameEngine") -> None:
-        from game.game_engine import GameState
-
-        speed = engine.metrics.live_speed() if engine.metrics else 0.0
-        speed_norm = min(speed / config.PLAYER_SPEED_MAX, 1.0)
-        slow  = np.array(config.PLAYER_COLOR_SLOW, dtype=float)
-        fast  = np.array(config.PLAYER_COLOR_FAST, dtype=float)
-        color = tuple(int(c) for c in (slow + (fast - slow) * speed_norm))
-
+        """Render player circular cursor with precision focal dot and subtle collision feedback."""
         pos = engine.player_pos
+        r = engine.radius
 
-        # Collision visual alert feedback
         is_colliding = getattr(engine.player, "is_colliding", False) or (getattr(engine.player, "collision_flash_timer", 0.0) > 0.0)
-        if is_colliding:
-            color = (30, 40, 255)  # Flash red
-            cv2.circle(canvas, pos, engine.radius + 6, (0, 70, 255), 2, cv2.LINE_AA)
-            cv2.circle(canvas, pos, engine.radius + 11, (0, 180, 255), 1, cv2.LINE_AA)
 
-        if engine.state == GameState.WAITING:
-            r = engine.radius + int(3 * math.sin(self._t * 4))
-            glow_circle(canvas, pos, r, color, glow_layers=max(1, config.PLAYER_GLOW_LAYERS - 1))
+        # Base cursor colors
+        if is_colliding:
+            fill_col = (40, 55, 230)      # Alert coral/red
+            border_col = (60, 90, 255)
         else:
-            glow_circle(canvas, pos, engine.radius, color, glow_layers=config.PLAYER_GLOW_LAYERS)
+            fill_col = config.PLAYER_COLOR  # Calm medical mint (80, 205, 140)
+            border_col = (220, 250, 235)    # Crisp hairline edge
+
+        # Subtle collision pulse halo (non-intrusive 1-px pulse ring)
+        if is_colliding:
+            cv2.circle(canvas, pos, r + 4, (45, 75, 250), 1, cv2.LINE_AA)
+
+        # Core cursor disc
+        cv2.circle(canvas, pos, r, fill_col, -1, cv2.LINE_AA)
+        # Precision perimeter ring
+        cv2.circle(canvas, pos, r, border_col, 1, cv2.LINE_AA)
+        # Center precision micro-dot for motor alignment
+        cv2.circle(canvas, pos, 2, (255, 255, 255), -1, cv2.LINE_AA)
 
     def _draw_hud(
         self,
@@ -314,46 +311,98 @@ class Renderer:
         is_mouse_fallback: bool = False,
         landmark_name: str = "",
     ) -> None:
+        """
+        Render clean clinical rehabilitation HUD:
+        Top-Left:
+            STROKE REHABILITATION
+            Difficulty: EASY / MEDIUM / HARD
+        Top-Right (Telemetry Card):
+            Time:       00.0 s
+            Distance:   0000 px
+            Collisions: 0
+            Efficiency: ---
+        """
         W, H = self.W, self.H
-        y    = 24
 
-        diff_tag = getattr(engine.level, "difficulty_tag", None) or engine.difficulty_cfg.name.upper()
-        diff_str = f"DIFFICULTY: {diff_tag}"
-        draw_text(canvas, diff_str, (12, y), font_scale=0.55, color=config.HUD_LABEL_COLOR)
-        draw_text(canvas, engine.level.name,
-                  (12, y + 26), font_scale=0.45, color=config.HUD_LABEL_COLOR)
+        # ── 1. Top-Left Header: Title & Difficulty ───────────────────────────
+        draw_text(canvas, "STROKE REHABILITATION", (20, 32),
+                  font_scale=0.66, color=(245, 248, 252), thickness=2)
 
-        if landmark_name and not is_mouse_fallback:
-            draw_text(canvas, f"TRACKING: {landmark_name}", (12, y + 48),
-                      font_scale=0.40, color=(100, 210, 160))
+        diff_name = (getattr(engine.level, "difficulty_tag", None) or engine.difficulty_cfg.name).upper()
+        if "EASY" in diff_name:
+            diff_color = (100, 215, 140)  # Medical mint
+        elif "HARD" in diff_name:
+            diff_color = (90, 100, 245)   # Clinical coral
+        else:
+            diff_color = (60, 190, 250)   # Medical amber/gold
 
-        # Seed indicator for procedural levels & mouse fallback
+        draw_text(canvas, "Difficulty: ", (20, 56),
+                  font_scale=0.50, color=(140, 165, 190), thickness=1)
+        ds = cv2.getTextSize("Difficulty: ", cv2.FONT_HERSHEY_SIMPLEX, 0.50, 1)[0]
+        draw_text(canvas, diff_name, (20 + ds[0], 56),
+                  font_scale=0.52, color=diff_color, thickness=2)
+
+        # ── 2. Top-Right Telemetry Card ──────────────────────────────────────
+        # Format metrics exactly as specified:
+        # Time: 00.0 s
+        # Distance: 0000 px
+        # Collisions: 0
+        # Efficiency: ---
+        t = engine.elapsed_time
+        time_val = f"{t:04.1f} s"
+
+        dist_val = f"{int(round(engine.actual_distance)):04d} px"
+        col_val  = str(engine.wall_hit_count)
+
+        if engine.actual_distance < 10.0 or engine.path_efficiency <= 0.0:
+            eff_val = "---"
+        else:
+            eff_val = f"{engine.path_efficiency:4.1f}%"
+
+        cw, ch = 215, 98
+        cx1 = W - cw - 20
+        cy1 = 14
+
+        # Sleek, semi-transparent dark clinical card
+        overlay = canvas.copy()
+        cv2.rectangle(overlay, (cx1, cy1), (cx1 + cw, cy1 + ch), (18, 22, 28), -1)
+        cv2.addWeighted(overlay, 0.72, canvas, 0.28, 0, canvas)
+        cv2.rectangle(canvas, (cx1, cy1), (cx1 + cw, cy1 + ch), (55, 72, 90), 1, cv2.LINE_AA)
+
+        is_colliding = getattr(engine.player, "is_colliding", False) or (getattr(engine.player, "collision_flash_timer", 0.0) > 0.0)
+        col_color = (60, 80, 245) if is_colliding else (240, 245, 250)
+
+        rows = [
+            ("Time:",       time_val, (240, 245, 250)),
+            ("Distance:",   dist_val, (240, 245, 250)),
+            ("Collisions:", col_val,  col_color),
+            ("Efficiency:", eff_val,  (240, 245, 250)),
+        ]
+
+        row_y = cy1 + 20
+        for label, val, val_col in rows:
+            draw_text(canvas, label, (cx1 + 14, row_y),
+                      font_scale=0.46, color=(140, 165, 190), thickness=1)
+            vs = cv2.getTextSize(val, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 1)[0]
+            draw_text(canvas, val, (cx1 + cw - 14 - vs[0], row_y),
+                      font_scale=0.48, color=val_col, thickness=1)
+            row_y += 22
+
+        # ── 3. Bottom Footer (Level name & subtle shortcuts) ─────────────────
+        lvl_name = getattr(engine.level, "name", "Level")
         seed_val = getattr(engine.level, "seed", None)
         if seed_val is not None:
-            draw_text(canvas, f"[SEED: {seed_val}]", (230, y),
-                      font_scale=0.45, color=(140, 200, 255), thickness=1)
-        elif is_mouse_fallback:
-            draw_text(canvas, "[DEV MOUSE ACTIVE]", (230, y),
-                      font_scale=0.45, color=(0, 220, 255), thickness=1)
+            left_info = f"Level: {lvl_name}  [Seed: {seed_val}]"
+        else:
+            left_info = f"Level: {lvl_name}"
+        draw_text(canvas, left_info, (20, H - 14),
+                  font_scale=0.44, color=(120, 140, 165))
 
-        # Elapsed time (right-aligned)
-        t        = engine.elapsed_time
-        time_str = f"{int(t // 60):02d}:{t % 60:05.2f}"
-        ts       = cv2.getTextSize(time_str, cv2.FONT_HERSHEY_SIMPLEX, 0.75, 2)[0]
-        draw_text(canvas, time_str, (W - ts[0] - 12, y),
-                  font_scale=0.75, color=config.HUD_TEXT_COLOR, thickness=2)
-
-        dist_str = f"  {int(engine.distance_to_end)} px to GOAL"
-        draw_text(canvas, dist_str, (W - 200, y + 30),
-                  font_scale=0.45, color=config.HUD_LABEL_COLOR)
-
-        draw_text(canvas, f"Traveled: {int(engine.actual_distance)} px  |  Wall hits: {engine.wall_hit_count}",
-                  (12, H - 16), font_scale=0.45, color=config.HUD_LABEL_COLOR)
-
-        hint = "R=Restart  P=Pause  L=Landmark  D=Debug  M=Mouse  ESC=Quit"
-        hs   = cv2.getTextSize(hint, cv2.FONT_HERSHEY_SIMPLEX, 0.4, 1)[0]
-        draw_text(canvas, hint, (W - hs[0] - 8, H - 10),
-                  font_scale=0.4, color=(80, 100, 130))
+        if not engine.is_finished:
+            hint = "[R] Restart   [P] Pause   [M] Menu   [ESC] Exit"
+            hs   = cv2.getTextSize(hint, cv2.FONT_HERSHEY_SIMPLEX, 0.42, 1)[0]
+            draw_text(canvas, hint, (W - hs[0] - 20, H - 14),
+                      font_scale=0.42, color=(95, 115, 135))
 
     def _draw_debug_overlay(
         self,

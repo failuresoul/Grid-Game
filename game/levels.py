@@ -177,6 +177,10 @@ class Level:
         """Alias for min_path_distance."""
         return self.min_path_distance
 
+    @minimum_path_distance.setter
+    def minimum_path_distance(self, val: float):
+        self.min_path_distance = float(val)
+
     def compute_minimum_path(self, player_radius: Optional[float] = None) -> float:
         """
         Compute the shortest collision-free route from START to END considering player radius

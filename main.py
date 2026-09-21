@@ -147,9 +147,38 @@ class RehabGame:
         log.info(f"New game: {diff_cfg.name}  |  {level.name} (READY)")
 
     def _on_mouse(self, event: int, x: int, y: int, flags: int, param: any) -> None:
-        """Track mouse position for development / testing fallback."""
+        """Track mouse position and handle interactive UI button clicks."""
         if event in (cv2.EVENT_MOUSEMOVE, cv2.EVENT_LBUTTONDOWN):
             self._mouse_pos = (float(x), float(y))
+
+        if event == cv2.EVENT_LBUTTONDOWN and self.app_state in (GameState.COMPLETED, GameState.RESULTS):
+            self._handle_results_click(float(x), float(y))
+
+    def _handle_results_click(self, x: float, y: float) -> bool:
+        """Handle mouse clicks on results screen action buttons."""
+        from ui.screens import get_results_button_rects
+        buttons = get_results_button_rects(config.CANVAS_WIDTH, config.CANVAS_HEIGHT)
+        for b_id, (bx, by, bw, bh), label, key in buttons:
+            if bx <= x <= bx + bw and by <= y <= by + bh:
+                log.info(f"Results button clicked: {label} ({b_id})")
+                if b_id == "PLAY_AGAIN":
+                    if self.engine:
+                        self.engine.restart()
+                        self.app_state = GameState.READY
+                    else:
+                        self._new_game()
+                elif b_id == "NEXT_LEVEL":
+                    total = self.maze_gen.level_count(self.difficulty)
+                    self.level_index = (self.level_index + 1) % total
+                    self._new_game()
+                elif b_id == "LEVEL_SELECT":
+                    self.app_state = GameState.LEVEL_SELECT
+                elif b_id == "MAIN_MENU":
+                    self.app_state = GameState.MENU
+                elif b_id == "EXIT":
+                    sys.exit(0)
+                return True
+        return False
 
     # ─────────────────────────────────────────────────────────────────────────
     #  Main loop
@@ -254,6 +283,7 @@ class RehabGame:
                     raw_coords=raw_coords,
                     debug_mode=self.debug_mode,
                     algo_name=algo_name,
+                    mouse_pos=self._mouse_pos,
                 )
                 cv2.imshow(self.WINDOW_NAME, canvas)
 
@@ -362,7 +392,11 @@ class RehabGame:
                 self.engine.toggle_pause()
                 self.app_state = self.engine.state
         elif key in (ord('l'), ord('L')):
-            self._cycle_landmark()
+            if self.app_state in (GameState.COMPLETED, GameState.RESULTS):
+                self.app_state = GameState.LEVEL_SELECT
+                log.info("Results navigation -> LEVEL_SELECT")
+            else:
+                self._cycle_landmark()
         elif key in (ord('d'), ord('D')):
             self.debug_mode = not self.debug_mode
             log.info(f"Debug coordinates overlay toggled: {self.debug_mode}")

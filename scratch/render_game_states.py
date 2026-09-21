@@ -77,6 +77,17 @@ def main():
     cv2.imwrite(playing_path, canvas_playing)
     print(f"Saved: {playing_path}")
 
+    # 4b. Render PLAYING state with collision feedback
+    engine.player.is_colliding = True
+    engine.player.collision_flash_timer = 0.25
+    engine.player.wall_hit_count = 1
+    canvas_collision = renderer.draw(engine, dt=0.016)
+    collision_path = os.path.join(artifact_dir, "state_collision_render.png")
+    cv2.imwrite(collision_path, canvas_collision)
+    print(f"Saved: {collision_path}")
+    engine.player.is_colliding = False
+    engine.player.collision_flash_timer = 0.0
+
     # 5. Render RESULTS state (completed session, frozen timer, restart prompt)
     engine._session_start = time.perf_counter() - 7.85
     for pt in wps:
