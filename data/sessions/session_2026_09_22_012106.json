@@ -1,0 +1,79 @@
+{
+  "timestamp": "2026-09-22 01:21:06",
+  "session_id": "session_20260922_012106_344ca778",
+  "difficulty": "EASY",
+  "maze_seed": null,
+  "completion_status": "COMPLETED",
+  "completion_time": 0.06,
+  "actual_distance": 167.3,
+  "minimum_distance": 200.0,
+  "path_efficiency": 100.0,
+  "accuracy": 92.7,
+  "smoothness": 89.9,
+  "collision_count": 0,
+  "deviation_count": 0,
+  "trajectory": [
+    {
+      "x": 100.0,
+      "y": 50.0,
+      "t": 0.016
+    },
+    {
+      "x": 150.0,
+      "y": 50.0,
+      "t": 0.032
+    },
+    {
+      "x": 200.0,
+      "y": 50.0,
+      "t": 0.048
+    },
+    {
+      "x": 245.0,
+      "y": 100.0,
+      "t": 0.064
+    }
+  ],
+  "optimal_path": [
+    {
+      "x": 50.0,
+      "y": 100.0
+    },
+    {
+      "x": 150.0,
+      "y": 50.0
+    },
+    {
+      "x": 250.0,
+      "y": 100.0
+    }
+  ],
+  "level_name": "TestCorridor",
+  "game_performance_metrics": {
+    "completion_time_s": 0.064,
+    "minimum_distance": 200.0,
+    "actual_distance": 167.3,
+    "actual_distance_px": 167.3,
+    "path_length_px": 167.3,
+    "ideal_distance_px": 200.0,
+    "min_path_distance_px": 200.0,
+    "path_efficiency": 100.0,
+    "path_efficiency_ratio": 1.0,
+    "trajectory_accuracy": 92.7,
+    "mean_path_deviation_px": 11.7,
+    "max_path_deviation_px": 22.4,
+    "rms_path_deviation_px": 15.8,
+    "time_outside_route_s": 0.0,
+    "pct_time_outside": 0.0,
+    "deviation_events": 0,
+    "corridor_adherence_pct": 100.0,
+    "peak_speed_px_s": 4204.3,
+    "mean_speed_px_s": 3484.8,
+    "smoothness_score": 89.9,
+    "game_smoothness_score": 89.9,
+    "normalised_jerk": 0.0,
+    "tremor_index": 0.0,
+    "rom_width_px": 145.0,
+    "rom_height_px": 50.0
+  }
+}

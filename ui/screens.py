@@ -367,6 +367,7 @@ def draw_results_screen(
     trajectory:      Optional[List[Tuple[float, float]]] = None,
     difficulty_name: str = "EASY",
     mouse_pos:       Optional[Tuple[float, float]] = None,
+    adaptive_recommendation: Optional[Any] = None,
 ) -> List[Tuple[str, Tuple[int, int, int, int], str, str]]:
     """
     Professional results screen after completing a maze:
@@ -388,6 +389,36 @@ def draw_results_screen(
     smoothness = m.get("smoothness_score", 100.0)
     t_outside = m.get("time_outside_route_s", 0.0)
     compl_time = m.get("completion_time_s", elapsed)
+
+    # ── Adaptive difficulty recommendation resolution ────────────────────────
+    rec = adaptive_recommendation
+    if rec is None and getattr(config, "ADAPTIVE_DIFFICULTY", True):
+        raw_rec = m.get("adaptive_recommendation")
+        if isinstance(raw_rec, dict):
+            from metrics.adaptive import AdaptiveRecommendation
+            act = raw_rec.get("action", "MAINTAIN")
+            col = (90, 225, 140) if act == "INCREASE" else ((80, 95, 245) if act == "DECREASE" else (215, 190, 90))
+            rec = AdaptiveRecommendation(
+                action=act,
+                current_difficulty=raw_rec.get("current_difficulty", difficulty_name),
+                target_difficulty=raw_rec.get("target_difficulty", difficulty_name),
+                badge_title=raw_rec.get("badge_title", "PRACTICE"),
+                headline=raw_rec.get("headline", ""),
+                rationale=raw_rec.get("rationale", ""),
+                color=col,
+                criteria_met=raw_rec.get("criteria_met", {}),
+            )
+        else:
+            try:
+                from metrics.adaptive import evaluate_adaptive_difficulty
+                rec = evaluate_adaptive_difficulty(
+                    current_metrics=m,
+                    current_difficulty=difficulty_name,
+                    wall_hits=wall_hits,
+                    completion_status="COMPLETED",
+                )
+            except Exception:
+                rec = None
 
     # ── 1. Semi-translucent dark slate backdrop ──────────────────────────────
     overlay = canvas.copy()
@@ -481,12 +512,35 @@ def draw_results_screen(
         draw_text(canvas, val, (c1_x + card_w - 18 - vs[0], ry),
                   font_scale=0.48, color=(240, 248, 255), thickness=1)
 
+    # ── Adaptive Difficulty Recommendation Card ──────────────────────────────
+    if rec is not None and getattr(config, "ADAPTIVE_DIFFICULTY", True):
+        rec_box_y = card_top + card_h - 116
+        rec_box_h = 88
+        rec_box_w = card_w - 24
+        rec_box_x = c1_x + 12
+        rec_col = getattr(rec, "color", (100, 220, 140))
+
+        cv2.rectangle(canvas, (rec_box_x, rec_box_y), (rec_box_x + rec_box_w, rec_box_y + rec_box_h),
+                      (16, 22, 30), -1)
+        cv2.rectangle(canvas, (rec_box_x, rec_box_y), (rec_box_x + rec_box_w, rec_box_y + rec_box_h),
+                      rec_col, 1, cv2.LINE_AA)
+
+        rec_badge = f"ADAPTIVE RECOMMENDATION: {getattr(rec, 'badge_title', 'RECOMMENDATION')}"
+        draw_text(canvas, rec_badge, (rec_box_x + 10, rec_box_y + 18),
+                  font_scale=0.38, color=rec_col, thickness=1)
+
+        headline = getattr(rec, "headline", "")
+        draw_text(canvas, headline, (rec_box_x + 10, rec_box_y + 40),
+                  font_scale=0.36, color=(240, 248, 255), thickness=1)
+
+        rationale = getattr(rec, "rationale", "")
+        draw_text(canvas, rationale, (rec_box_x + 10, rec_box_y + 64),
+                  font_scale=0.32, color=(145, 170, 195))
+
     # Non-diagnostic disclaimer footnote at bottom of left card
-    footnote_y = card_top + card_h - 24
-    draw_text(canvas, "* Evaluates game movement performance only.",
-              (c1_x + 16, footnote_y - 12), font_scale=0.34, color=(105, 125, 145))
-    draw_text(canvas, "* Not a medical diagnosis or recovery assessment.",
-              (c1_x + 16, footnote_y + 4), font_scale=0.34, color=(105, 125, 145))
+    footnote_y = card_top + card_h - 12
+    draw_text(canvas, "* Evaluates game movement performance only. * Not a medical diagnosis.",
+              (c1_x + 16, footnote_y), font_scale=0.32, color=(105, 125, 145))
 
     # ─────────────────────────────────────────────────────────────────────────
     #  RIGHT CARD: Trajectory Visualization (Optimal vs. Patient Path)
@@ -641,6 +695,7 @@ def draw_win_overlay(
     trajectory:    Optional[List[Tuple[float, float]]] = None,
     difficulty_name: str = "EASY",
     mouse_pos:     Optional[Tuple[float, float]] = None,
+    adaptive_recommendation: Optional[Any] = None,
 ) -> List[Tuple[str, Tuple[int, int, int, int], str, str]]:
     """Backward-compatible wrapper routing to the professional draw_results_screen."""
     return draw_results_screen(
@@ -655,6 +710,7 @@ def draw_win_overlay(
         trajectory=trajectory,
         difficulty_name=difficulty_name,
         mouse_pos=mouse_pos,
+        adaptive_recommendation=adaptive_recommendation,
     )
 
 

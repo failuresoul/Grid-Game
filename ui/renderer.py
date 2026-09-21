@@ -145,6 +145,7 @@ class Renderer:
                 trajectory=engine.full_trajectory,
                 difficulty_name=getattr(engine.difficulty_cfg, "name", "EASY"),
                 mouse_pos=mouse_pos,
+                adaptive_recommendation=getattr(engine, "adaptive_recommendation", None),
             )
         elif state == GameState.TIMEOUT:
             draw_timeout_overlay(

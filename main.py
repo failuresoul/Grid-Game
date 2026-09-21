@@ -90,6 +90,11 @@ class RehabGame:
         # ── Real-time coordinate telemetry debug mode ────────────────────────
         self.debug_mode: bool = getattr(config, "DEBUG_COORDINATES", False)
 
+        # ── Progress & History state ─────────────────────────────────────────
+        self.history_filter: str = "ALL"
+        self.history_page: int = 0
+        self.history_sessions: list = []
+
         # ── EMG (disabled) ────────────────────────────────────────────────────
         self.emg = None
 
@@ -151,8 +156,51 @@ class RehabGame:
         if event in (cv2.EVENT_MOUSEMOVE, cv2.EVENT_LBUTTONDOWN):
             self._mouse_pos = (float(x), float(y))
 
-        if event == cv2.EVENT_LBUTTONDOWN and self.app_state in (GameState.COMPLETED, GameState.RESULTS):
-            self._handle_results_click(float(x), float(y))
+        if event == cv2.EVENT_LBUTTONDOWN:
+            if self.app_state in (GameState.COMPLETED, GameState.RESULTS):
+                self._handle_results_click(float(x), float(y))
+            elif self.app_state == GameState.HISTORY:
+                self._handle_history_click(float(x), float(y))
+
+    def _handle_history_click(self, x: float, y: float) -> bool:
+        """Handle mouse clicks on history screen buttons and filter tabs."""
+        from ui.screens import get_history_button_rects
+        from metrics.history_reader import filter_sessions
+        filtered = filter_sessions(self.history_sessions, self.history_filter)
+        total_pages = max(1, (len(filtered) + 6) // 7)
+        buttons = get_history_button_rects(
+            config.CANVAS_WIDTH, config.CANVAS_HEIGHT,
+            current_filter=self.history_filter,
+            page=self.history_page,
+            total_pages=total_pages,
+        )
+        for b_id, (bx, by, bw, bh), label, key in buttons:
+            if bx <= x <= bx + bw and by <= y <= by + bh:
+                log.info(f"History button clicked: {label} ({b_id})")
+                if b_id == "FILTER_ALL":
+                    self.history_filter = "ALL"
+                    self.history_page = 0
+                elif b_id == "FILTER_EASY":
+                    self.history_filter = "EASY"
+                    self.history_page = 0
+                elif b_id == "FILTER_MEDIUM":
+                    self.history_filter = "MEDIUM"
+                    self.history_page = 0
+                elif b_id == "FILTER_HARD":
+                    self.history_filter = "HARD"
+                    self.history_page = 0
+                elif b_id == "PREV_PAGE":
+                    self.history_page = max(0, self.history_page - 1)
+                elif b_id == "NEXT_PAGE":
+                    self.history_page = min(total_pages - 1, self.history_page + 1)
+                elif b_id == "MAIN_MENU":
+                    self.app_state = GameState.MENU
+                elif b_id == "LEVEL_SELECT":
+                    self.app_state = GameState.LEVEL_SELECT
+                elif b_id == "EXIT":
+                    sys.exit(0)
+                return True
+        return False
 
     def _handle_results_click(self, x: float, y: float) -> bool:
         """Handle mouse clicks on results screen action buttons."""
@@ -238,6 +286,23 @@ class RehabGame:
                     cv2.imshow(self.WINDOW_NAME, canvas)
                     key = cv2.waitKey(1) & 0xFF
                     if self._handle_menu_key(key):
+                        break
+                    if cv2.getWindowProperty(self.WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
+                        break
+                    continue
+
+                # ── 1b. HISTORY State ─────────────────────────────────────────
+                if self.app_state == GameState.HISTORY:
+                    canvas, _ = self.renderer.draw_history_screen(
+                        sessions=self.history_sessions,
+                        current_filter=self.history_filter,
+                        page=self.history_page,
+                        mouse_pos=self._mouse_pos,
+                    )
+                    self._composite_pip(canvas, pip_frame)
+                    cv2.imshow(self.WINDOW_NAME, canvas)
+                    key = cv2.waitKey(1) & 0xFF
+                    if self._handle_history_key(key):
                         break
                     if cv2.getWindowProperty(self.WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
                         break
@@ -332,9 +397,47 @@ class RehabGame:
         elif key in (ord('m'), ord('M')):
             self.mouse_fallback_enabled = not self.mouse_fallback_enabled
             log.info(f"Mouse fallback toggled: {self.mouse_fallback_enabled}")
+        elif key in (ord('h'), ord('H')):
+            from metrics.history_reader import load_all_sessions
+            self.history_sessions = load_all_sessions()
+            self.history_filter = "ALL"
+            self.history_page = 0
+            self.app_state = GameState.HISTORY
+            log.info("State transition: MENU -> HISTORY")
         elif key in (13, 32):   # ENTER or SPACE -> Proceed to LEVEL_SELECT
             self.app_state = GameState.LEVEL_SELECT
             log.info("State transition: MENU -> LEVEL_SELECT")
+        return False
+
+    def _handle_history_key(self, key: int) -> bool:
+        """Handle keyboard input on HISTORY screen."""
+        if key == 27 or key in (ord('m'), ord('M')):  # ESC or M -> return to MENU
+            self.app_state = GameState.MENU
+            log.info("State transition: HISTORY -> MENU")
+            return False
+        if key in (ord('l'), ord('L')):
+            self.app_state = GameState.LEVEL_SELECT
+            log.info("State transition: HISTORY -> LEVEL_SELECT")
+            return False
+        if key == ord('1'):
+            self.history_filter = "ALL"
+            self.history_page = 0
+        elif key == ord('2'):
+            self.history_filter = "EASY"
+            self.history_page = 0
+        elif key == ord('3'):
+            self.history_filter = "MEDIUM"
+            self.history_page = 0
+        elif key == ord('4'):
+            self.history_filter = "HARD"
+            self.history_page = 0
+        elif key in (ord('p'), ord('P')):
+            self.history_page = max(0, self.history_page - 1)
+        elif key in (ord('n'), ord('N')):
+            from metrics.history_reader import filter_sessions
+            filtered = filter_sessions(self.history_sessions, self.history_filter)
+            total_pages = max(1, (len(filtered) + 6) // 7)
+            self.history_page = min(total_pages - 1, self.history_page + 1)
         return False
 
     def _handle_level_select_key(self, key: int) -> bool:
@@ -410,6 +513,13 @@ class RehabGame:
                 self._new_game()
         elif key in (ord('c'), ord('C')):
             config.CAMERA_PIP_ENABLED = not config.CAMERA_PIP_ENABLED
+        elif key in (ord('h'), ord('H')) and self.app_state in (GameState.COMPLETED, GameState.RESULTS):
+            from metrics.history_reader import load_all_sessions
+            self.history_sessions = load_all_sessions()
+            self.history_filter = "ALL"
+            self.history_page = 0
+            self.app_state = GameState.HISTORY
+            log.info("State transition: RESULTS -> HISTORY")
         elif key in (13, 32) and self.app_state in (GameState.COMPLETED, GameState.RESULTS):
             # Advance from results to next level
             total = self.maze_gen.level_count(self.difficulty)

@@ -113,11 +113,16 @@ def load_all_sessions(data_dir: Optional[str] = None) -> List[Dict[str, Any]]:
 
     # 1. Load JSON session files (primary source with full trajectory)
     try:
-        json_pattern = os.path.join(actual_dir, "session_*.json")
+        json_pattern = os.path.join(actual_dir, "*.json")
         for jpath in glob.glob(json_pattern):
             try:
                 with open(jpath, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                if not isinstance(data, dict):
+                    continue
+                # Require at least one session-identifying attribute
+                if not any(k in data for k in ("timestamp", "completion_status", "difficulty", "completion_time", "actual_distance")):
+                    continue
                 norm = _normalize_session_dict(data, default_id=os.path.basename(jpath))
                 sid = norm["session_id"]
                 if sid not in seen_ids:

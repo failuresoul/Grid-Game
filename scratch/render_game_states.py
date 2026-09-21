@@ -98,6 +98,28 @@ def main():
     cv2.imwrite(results_path, canvas_results)
     print(f"Saved: {results_path}")
 
+    # 6. Render HISTORY state (populated with recorded sessions & 5 trend graphs)
+    from metrics.history_reader import load_all_sessions
+    all_sessions = load_all_sessions()
+    canvas_history, _ = renderer.draw_history_screen(
+        sessions=all_sessions,
+        current_filter="ALL",
+        page=0,
+    )
+    history_path = os.path.join(artifact_dir, "state_history_render.png")
+    cv2.imwrite(history_path, canvas_history)
+    print(f"Saved: {history_path}")
+
+    # 6b. Render HISTORY state (empty state: 'No previous sessions available.')
+    canvas_history_empty, _ = renderer.draw_history_screen(
+        sessions=[],
+        current_filter="ALL",
+        page=0,
+    )
+    history_empty_path = os.path.join(artifact_dir, "state_history_empty_render.png")
+    cv2.imwrite(history_empty_path, canvas_history_empty)
+    print(f"Saved: {history_empty_path}")
+
 
 if __name__ == "__main__":
     main()

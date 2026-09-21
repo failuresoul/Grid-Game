@@ -274,6 +274,28 @@ SAVE_METRICS_ON_TIMEOUT: bool = True             # Save CSV on time-out
 JERK_WINDOW: int = 5
 
 # =============================================================================
+#  11b. Adaptive Difficulty Recommendation
+# =============================================================================
+# Enable/disable adaptive difficulty suggestions on the results screen
+ADAPTIVE_DIFFICULTY: bool = True
+
+# Performance thresholds for suggesting difficulty increase (high motor control):
+# Note: Raw speed is NEVER assumed to mean recovery; movement quality is prioritised.
+ACCURACY_THRESHOLD: float       = 90.0   # % corridor adherence (default >= 90%)
+EFFICIENCY_THRESHOLD: float     = 85.0   # % path efficiency (default >= 85%)
+SMOOTHNESS_THRESHOLD: float     = 75.0   # movement smoothness score (default >= 75/100)
+MAX_COLLISIONS_THRESHOLD: int   = 1      # max wall contacts allowable for promotion
+
+# Thresholds indicating severe motor struggle (suggesting easier level or repeat):
+LOW_ACCURACY_THRESHOLD: float   = 65.0   # % corridor adherence
+LOW_EFFICIENCY_THRESHOLD: float = 50.0   # % path efficiency
+LOW_SMOOTHNESS_THRESHOLD: float = 40.0   # movement smoothness score
+HIGH_COLLISIONS_THRESHOLD: int  = 4      # wall contacts indicating difficulty
+
+# Consecutive completed sessions required to establish consistent high performance
+ADAPTIVE_CONSISTENCY_WINDOW: int = 2
+
+# =============================================================================
 #  12. Color Palette  (BGR tuples for OpenCV)
 # =============================================================================
 # All colours are (Blue, Green, Red) tuples in the range [0, 255].

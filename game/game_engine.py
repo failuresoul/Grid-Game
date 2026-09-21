@@ -95,6 +95,7 @@ class GameEngine:
         self.final_metrics: Optional[dict] = None
         self._metrics_saved: bool = False
         self.last_saved_session_file: Optional[str] = None
+        self.adaptive_recommendation = None
 
     # ─────────────────────────────────────────────────────────────────────────
     #  Main update — called every frame by main.py
@@ -175,6 +176,24 @@ class GameEngine:
             self.metrics.stop_recording()
             self.final_metrics = self.metrics.compute()
 
+        # Compute clinical adaptive difficulty recommendation
+        try:
+            from metrics.adaptive import evaluate_adaptive_difficulty
+            from metrics.history_reader import load_all_sessions
+            history = load_all_sessions()
+            diff_tag = (getattr(self.level, "difficulty_tag", None) or self.difficulty_cfg.name).upper()
+            self.adaptive_recommendation = evaluate_adaptive_difficulty(
+                current_metrics=self.final_metrics or {},
+                current_difficulty=diff_tag,
+                wall_hits=self.player.wall_hit_count,
+                completion_status="COMPLETED" if won else "TIMEOUT",
+                session_history=history,
+            )
+            if self.adaptive_recommendation and self.final_metrics is not None:
+                self.final_metrics["adaptive_recommendation"] = self.adaptive_recommendation.to_dict()
+        except Exception as e:
+            log.warning(f"Could not compute adaptive difficulty recommendation: {e}")
+
         # Save session CSV immediately upon completion
         self.save_session_metrics()
 
@@ -203,6 +222,7 @@ class GameEngine:
         self.final_metrics  = None
         self._metrics_saved = False
         self.last_saved_session_file = None
+        self.adaptive_recommendation = None
         if self.metrics:
             self.metrics.start_recording()
             self.metrics.stop_recording()
