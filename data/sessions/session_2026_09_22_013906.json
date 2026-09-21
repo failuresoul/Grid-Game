@@ -1,0 +1,52 @@
+{
+  "timestamp": "2026-09-22 01:39:06",
+  "session_id": "session_20260922_013906_6bc068f1",
+  "difficulty": "EASY",
+  "maze_seed": null,
+  "completion_status": "COMPLETED",
+  "completion_time": 0.0,
+  "actual_distance": 877.5,
+  "minimum_distance": 877.4,
+  "path_efficiency": 100.0,
+  "accuracy": 79.0,
+  "smoothness": 38.4,
+  "collision_count": 0,
+  "deviation_count": 0,
+  "trajectory": [
+    {
+      "x": 140.0,
+      "y": 560.0,
+      "t": 0.0
+    },
+    {
+      "x": 180.0,
+      "y": 600.0,
+      "t": 0.0
+    },
+    {
+      "x": 860.0,
+      "y": 140.0,
+      "t": 0.0
+    }
+  ],
+  "optimal_path": [
+    {
+      "x": 140.0,
+      "y": 560.0
+    },
+    {
+      "x": 389.0,
+      "y": 347.0
+    },
+    {
+      "x": 611.0,
+      "y": 353.0
+    },
+    {
+      "x": 860.0,
+      "y": 140.0
+    }
+  ],
+  "level_name": "Easy-1: Gentle Flow",
+  "game_performance_metrics": {}
+}
