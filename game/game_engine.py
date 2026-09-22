@@ -130,7 +130,8 @@ class GameEngine:
         # _READY_HOLD_DURATION seconds, or when moving out of start after being ready.
         if self.state in (GameState.READY, GameState.WAITING):
             dist_to_start = math.dist((tx, ty), self.level.start)
-            start_zone_r = float(self.level.start_r + self.player.radius)
+            margin = 15.0 if self.require_start_dwell else 0.0
+            start_zone_r = float(self.level.start_r + self.player.radius + margin)
 
             if self.require_start_dwell:
                 # Live interactive game: keep player at START until dwell finishes or start triggered
@@ -465,6 +466,11 @@ class GameEngine:
     @property
     def distance_to_end(self) -> float:
         return math.dist(self.player.position_f, self.level.end)
+
+    @property
+    def is_running(self) -> bool:
+        """True if the session is currently in active gameplay."""
+        return self.state in (GameState.PLAYING, GameState.RUNNING)
 
     @property
     def is_completed(self) -> bool:

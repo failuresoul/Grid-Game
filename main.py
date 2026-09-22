@@ -175,6 +175,33 @@ def _draw_gesture_progress(
         break
 
 
+def _draw_hand_cursor(
+    canvas: np.ndarray,
+    cursor: Optional[Tuple[float, float]],
+    anim_t: float = 0.0,
+) -> None:
+    """
+    Draw a glowing precision reticle cursor for hand tracking across UI screens.
+    Helps patients and clinicians clearly locate their hand in 2D space before,
+    during, and after gameplay.
+    """
+    if cursor is None:
+        return
+    cx, cy = int(round(cursor[0])), int(round(cursor[1]))
+    h, w = canvas.shape[:2]
+    if not (0 <= cx < w and 0 <= cy < h):
+        return
+
+    pulse = 0.75 + 0.25 * math.sin(anim_t * 5.0)
+    col = (0, int(230 * pulse), 255)       # Glowing amber / cyan
+    cv2.circle(canvas, (cx, cy), 13, col, 2, cv2.LINE_AA)
+    cv2.circle(canvas, (cx, cy), 3, (255, 255, 255), -1, cv2.LINE_AA)
+    cv2.line(canvas, (cx - 16, cy), (cx - 6, cy), col, 2, cv2.LINE_AA)
+    cv2.line(canvas, (cx + 6, cy), (cx + 16, cy), col, 2, cv2.LINE_AA)
+    cv2.line(canvas, (cx, cy - 16), (cx, cy - 6), col, 2, cv2.LINE_AA)
+    cv2.line(canvas, (cx, cy + 6), (cx, cy + 16), col, 2, cv2.LINE_AA)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  Application
 # ─────────────────────────────────────────────────────────────────────────────
@@ -544,16 +571,20 @@ class RehabGame:
                     fired = self.gesture.update(cursor, menu_btns, dt)
                     _draw_gesture_progress(canvas, menu_btns, self.gesture.hover_id, self.gesture.hover_progress)
                     if fired:
-                        if fired == 'DIFF_1':
-                            self.difficulty = 1; self.gesture.reset()
-                        elif fired == 'DIFF_2':
-                            self.difficulty = 2; self.gesture.reset()
-                        elif fired == 'DIFF_3':
-                            self.difficulty = 3; self.gesture.reset()
-                        elif fired == 'START':
-                            self.app_state = GameState.LEVEL_SELECT
+                        if fired in ('DIFF_1', 'DIFF_2', 'DIFF_3', 'START'):
+                            if fired == 'DIFF_1':
+                                self.difficulty = 1
+                            elif fired == 'DIFF_2':
+                                self.difficulty = 2
+                            elif fired == 'DIFF_3':
+                                self.difficulty = 3
+                            self.level_index = 0
+                            if self.cap and self.cap.isOpened():
+                                self._build_tracker()
+                            self._new_game()
+                            self.app_state = GameState.READY
                             self.gesture.reset()
-                            log.info('Gesture: MENU -> LEVEL_SELECT')
+                            log.info(f"Gesture: MENU -> game section READY (Difficulty {self.difficulty})")
                         elif fired == 'HISTORY':
                             from metrics.history_reader import load_all_sessions
                             self.history_sessions = load_all_sessions()
@@ -564,6 +595,7 @@ class RehabGame:
                         elif fired == 'MOVE_CAMERA':
                             self._cycle_pip_corner()
                             self.gesture.reset()
+                    _draw_hand_cursor(canvas, cursor, self.gesture.hover_timer)
                     self._composite_pip(canvas, pip_frame)
                     cv2.imshow(self.WINDOW_NAME, canvas)
                     key = cv2.waitKey(1) & 0xFF
@@ -602,6 +634,7 @@ class RehabGame:
                         self.gesture.reset()
                     elif fired:
                         self._handle_history_action(fired)
+                    _draw_hand_cursor(canvas, cursor, self.gesture.hover_timer)
                     self._composite_pip(canvas, pip_frame)
                     cv2.imshow(self.WINDOW_NAME, canvas)
                     key = cv2.waitKey(1) & 0xFF
@@ -650,6 +683,7 @@ class RehabGame:
                         elif fired == 'MOVE_CAMERA':
                             self._cycle_pip_corner()
                             self.gesture.reset()
+                    _draw_hand_cursor(canvas, cursor, self.gesture.hover_timer)
                     self._composite_pip(canvas, pip_frame, level=prev_lvl)
                     cv2.imshow(self.WINDOW_NAME, canvas)
                     key = cv2.waitKey(1) & 0xFF
@@ -679,6 +713,7 @@ class RehabGame:
                     algo_name=algo_name,
                     mouse_pos=self._mouse_pos,
                     pip_pos=tuple(self.pip_pos),
+                    cursor_pos=cursor,
                 )
 
                 # ── Gesture control per active gameplay state ─────────────────
@@ -792,6 +827,10 @@ class RehabGame:
                 else:
                     self.gesture.reset()
 
+                # Draw visible hand reticle during results and pause screens for gesture selection
+                if self.app_state in (GameState.COMPLETED, GameState.RESULTS, GameState.WIN, GameState.TIMEOUT, GameState.PAUSED):
+                    _draw_hand_cursor(canvas, cursor, self.gesture.hover_timer)
+
                 cv2.imshow(self.WINDOW_NAME, canvas)
 
                 key = cv2.waitKey(1) & 0xFF
@@ -848,9 +887,16 @@ class RehabGame:
             self.history_page = 0
             self.app_state = GameState.HISTORY
             log.info("State transition: MENU -> HISTORY")
-        elif key in (13, 32):   # ENTER or SPACE -> Proceed to LEVEL_SELECT
+        elif key in (ord('l'), ord('L')):
             self.app_state = GameState.LEVEL_SELECT
             log.info("State transition: MENU -> LEVEL_SELECT")
+        elif key in (13, 32):   # ENTER or SPACE -> Proceed directly to Game Section (READY)
+            self.level_index = 0
+            if self.cap and self.cap.isOpened():
+                self._build_tracker()
+            self._new_game()
+            self.app_state = GameState.READY
+            log.info("State transition: MENU -> READY (Game Section)")
         return False
 
     def _handle_history_key(self, key: int) -> bool:

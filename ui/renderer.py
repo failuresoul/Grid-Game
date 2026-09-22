@@ -88,6 +88,7 @@ class Renderer:
         algo_name:         str  = "",
         mouse_pos:         Optional[Tuple[float, float]] = None,
         pip_pos:           Optional[Tuple[int, int]] = None,
+        cursor_pos:        Optional[Tuple[float, float]] = None,
     ) -> np.ndarray:
         """
         Render a complete gameplay frame.
@@ -103,6 +104,7 @@ class Renderer:
             algo_name:         Name of active smoothing algorithm (e.g. ONE_EURO / EMA).
             mouse_pos:         Optional mouse position for UI hover detection.
             pip_pos:           Optional explicit (x, y) position of moveable PiP thumbnail.
+            cursor_pos:        Current hand cursor position for pre-game reticle rendering.
 
         Returns:
             BGR ndarray (H × W × 3) ready for cv2.imshow().
@@ -112,15 +114,29 @@ class Renderer:
         self._t += dt
         canvas = self._bg.copy()
         level  = engine.level
+        state  = engine.state
 
-        # Minimum path displayed visually strictly in debug mode
-        if debug_mode:
+        # Minimum path displayed visually in READY state (clinical guidance) and in debug mode
+        if debug_mode or state in (GameState.READY, GameState.WAITING):
             self._draw_minimum_path(canvas, level)
 
         self._draw_walls(canvas, level)
         self._draw_trail(canvas, engine.trail)
         self._draw_start_end(canvas, level)
         self._draw_player(canvas, engine)
+
+        # Draw visible hand reticle during READY/WAITING so user sees their hand before game starts
+        if cursor_pos is not None and state in (GameState.READY, GameState.WAITING):
+            cx, cy = int(round(cursor_pos[0])), int(round(cursor_pos[1]))
+            if 0 <= cx < self.W and 0 <= cy < self.H:
+                pulse = 0.7 + 0.3 * math.sin(self._t * 5.0)
+                col = (0, int(230 * pulse), 255)
+                cv2.circle(canvas, (cx, cy), 13, col, 2, cv2.LINE_AA)
+                cv2.circle(canvas, (cx, cy), 3, (255, 255, 255), -1, cv2.LINE_AA)
+                cv2.line(canvas, (cx - 16, cy), (cx - 6, cy), col, 1, cv2.LINE_AA)
+                cv2.line(canvas, (cx + 6, cy), (cx + 16, cy), col, 1, cv2.LINE_AA)
+                cv2.line(canvas, (cx, cy - 16), (cx, cy - 6), col, 1, cv2.LINE_AA)
+                cv2.line(canvas, (cx, cy + 6), (cx, cy + 16), col, 1, cv2.LINE_AA)
         # Only render gameplay HUD when active, not during results screen
         state = engine.state
         if state not in (GameState.COMPLETED, GameState.RESULTS, GameState.WIN):
@@ -349,7 +365,8 @@ class Renderer:
 
         if len(pts) >= 2:
             mid_pt = pts[len(pts) // 2]
-            label = f"MIN PATH: {getattr(level, 'min_path_distance', 0.0):.1f} px"
+            dist_val = getattr(level, 'minimum_path_distance', getattr(level, 'min_path_distance', 0.0)) or 0.0
+            label = f"MIN PATH: {dist_val:.1f} px"
             lx = max(20, min(self.W - 200, int(round(mid_pt[0])) + 10))
             ly = max(30, min(self.H - 30, int(round(mid_pt[1])) - 10))
             draw_text(canvas, label, (lx, ly), font_scale=0.38, color=(0, 240, 180), thickness=1)
