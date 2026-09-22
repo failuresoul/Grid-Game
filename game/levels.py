@@ -643,20 +643,12 @@ def create_easy_level(W: int = config.CANVAS_WIDTH, H: int = config.CANVAS_HEIGH
     obs2_h = float(H) - obs2_y
     builder.add_rect(obs2_x, obs2_y, obs2_w, obs2_h)
 
-    # 4. Analytical optimal waypoints and minimum path calculation
-    # Patient radius = 18 px on Easy. Clearing corner 1 by +18 px, clearing corner 2 by -18 px.
-    r_p = 18.0
-    w1 = (obs1_x + obs1_w + r_p, obs1_h + r_p)
-    w2 = (obs2_x - r_p, obs2_y - r_p)
-    waypoints = [
-        (float(start_pos[0]), float(start_pos[1])),
-        w1,
-        w2,
-        (float(end_pos[0]), float(end_pos[1])),
-    ]
-    builder.set_optimal_path(waypoints)
-
-    return builder.build()
+    # 4. Optimal minimum path calculation
+    # In Easy-1, the open channel between the upper and lower baffles allows a direct,
+    # collision-free path between START and END.
+    lvl = builder.build()
+    lvl.compute_minimum_path(player_radius=18.0)
+    return lvl
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -873,20 +865,9 @@ def create_medium_level(W: int = config.CANVAS_WIDTH, H: int = config.CANVAS_HEI
     w5_h = float(t)
     builder.add_rect(w5_x, w5_y, w5_w, w5_h)
 
-    # 7. Analytical Minimum Path Waypoints (Lower-Central Route)
-    waypoints = [
-        (float(start_pos[0]), float(start_pos[1])),  # S: (110, 590)
-        (w1_x + w1_w + 50.0, float(H) - 80.0),       # Under Obstacle 1: (300, 620)
-        (w3_x - 50.0, float(H) - 80.0),              # Approach Obstacle 3 base: (400, 620)
-        (w3_x - 50.0, 310.0),                        # Turn upward along channel: (400, 310)
-        (w3_x + w3_w + 60.0, 310.0),                 # Clear Obstacle 3 top: (520, 310)
-        (w4_x + w4_w + 40.0, w4_h + 60.0),           # Under Obstacle 4: (750, 420)
-        (float(W) - 80.0, w4_h + 60.0),              # Into right-hand corridor: (920, 420)
-        (float(end_pos[0]), float(end_pos[1])),      # E: (890, 110)
-    ]
-    builder.set_optimal_path(waypoints)
-
-    return builder.build()
+    lvl = builder.build()
+    lvl.compute_minimum_path(player_radius=14.0)
+    return lvl
 
 
 def medium_levels(W: int, H: int) -> List[Level]:
@@ -1032,28 +1013,9 @@ def create_hard_level(W: int = config.CANVAS_WIDTH, H: int = config.CANVAS_HEIGH
     # 13. Obstacle 13: Pre-Goal vertical wall in Column 8 (x=850 to 870, y=160 to 700)
     builder.add_rect(850, 160, t, float(H) - 160)
 
-    # Analytical waypoints through the labyrinth:
-    waypoints = [
-        (float(start_pos[0]), float(start_pos[1])),  # (75, 625)
-        (205.0, 625.0),
-        (205.0, 175.0),
-        (295.0, 175.0),
-        (295.0, 560.0),
-        (385.0, 560.0),
-        (385.0, 80.0),
-        (480.0, 80.0),
-        (480.0, 350.0),
-        (605.0, 350.0),
-        (605.0, 120.0),
-        (720.0, 120.0),
-        (720.0, 550.0),
-        (815.0, 550.0),
-        (815.0, 90.0),
-        (float(end_pos[0]), float(end_pos[1])),      # (925, 75)
-    ]
-    builder.set_optimal_path(waypoints)
-
-    return builder.build()
+    lvl = builder.build()
+    lvl.compute_minimum_path(player_radius=10.0)
+    return lvl
 
 
 def hard_levels(W: int, H: int) -> List[Level]:

@@ -1,0 +1,309 @@
+{
+  "timestamp": "2026-09-22 06:35:39",
+  "session_id": "session_20260922_063539_14a5d5a2",
+  "difficulty": "EASY",
+  "maze_seed": null,
+  "completion_status": "COMPLETED",
+  "completion_time": 3.29,
+  "actual_distance": 948.6,
+  "minimum_distance": 705.0,
+  "path_efficiency": 74.3,
+  "accuracy": 8.7,
+  "smoothness": 77.1,
+  "collision_count": 1,
+  "deviation_count": 1,
+  "trajectory": [
+    {
+      "x": 282.06,
+      "y": 268.16,
+      "t": 0.074
+    },
+    {
+      "x": 401.0,
+      "y": 574.0,
+      "t": 0.15
+    },
+    {
+      "x": 401.0,
+      "y": 574.0,
+      "t": 0.224
+    },
+    {
+      "x": 401.0,
+      "y": 574.0,
+      "t": 0.285
+    },
+    {
+      "x": 401.0,
+      "y": 574.0,
+      "t": 0.347
+    },
+    {
+      "x": 401.0,
+      "y": 574.0,
+      "t": 0.429
+    },
+    {
+      "x": 401.0,
+      "y": 574.0,
+      "t": 0.494
+    },
+    {
+      "x": 401.0,
+      "y": 574.0,
+      "t": 0.558
+    },
+    {
+      "x": 401.0,
+      "y": 574.0,
+      "t": 0.636
+    },
+    {
+      "x": 401.0,
+      "y": 574.0,
+      "t": 0.703
+    },
+    {
+      "x": 401.0,
+      "y": 574.0,
+      "t": 0.779
+    },
+    {
+      "x": 401.0,
+      "y": 574.0,
+      "t": 0.848
+    },
+    {
+      "x": 401.0,
+      "y": 574.0,
+      "t": 0.915
+    },
+    {
+      "x": 401.0,
+      "y": 574.0,
+      "t": 0.992
+    },
+    {
+      "x": 401.0,
+      "y": 574.0,
+      "t": 1.055
+    },
+    {
+      "x": 401.0,
+      "y": 574.0,
+      "t": 1.122
+    },
+    {
+      "x": 401.0,
+      "y": 574.0,
+      "t": 1.199
+    },
+    {
+      "x": 401.0,
+      "y": 574.0,
+      "t": 1.263
+    },
+    {
+      "x": 774.33,
+      "y": 477.04,
+      "t": 1.344
+    },
+    {
+      "x": 752.33,
+      "y": 453.29,
+      "t": 1.424
+    },
+    {
+      "x": 727.36,
+      "y": 431.38,
+      "t": 1.468
+    },
+    {
+      "x": 718.36,
+      "y": 418.54,
+      "t": 1.546
+    },
+    {
+      "x": 710.76,
+      "y": 410.77,
+      "t": 1.612
+    },
+    {
+      "x": 712.12,
+      "y": 403.63,
+      "t": 1.673
+    },
+    {
+      "x": 710.24,
+      "y": 399.91,
+      "t": 1.756
+    },
+    {
+      "x": 707.92,
+      "y": 401.37,
+      "t": 1.819
+    },
+    {
+      "x": 707.92,
+      "y": 401.37,
+      "t": 1.901
+    },
+    {
+      "x": 707.23,
+      "y": 399.85,
+      "t": 1.967
+    },
+    {
+      "x": 707.2,
+      "y": 401.48,
+      "t": 2.026
+    },
+    {
+      "x": 704.67,
+      "y": 405.05,
+      "t": 2.11
+    },
+    {
+      "x": 702.64,
+      "y": 411.48,
+      "t": 2.173
+    },
+    {
+      "x": 699.72,
+      "y": 415.7,
+      "t": 2.235
+    },
+    {
+      "x": 697.53,
+      "y": 421.74,
+      "t": 2.315
+    },
+    {
+      "x": 695.38,
+      "y": 429.17,
+      "t": 2.38
+    },
+    {
+      "x": 694.14,
+      "y": 436.91,
+      "t": 2.459
+    },
+    {
+      "x": 692.14,
+      "y": 444.95,
+      "t": 2.523
+    },
+    {
+      "x": 688.91,
+      "y": 453.03,
+      "t": 2.589
+    },
+    {
+      "x": 687.06,
+      "y": 459.42,
+      "t": 2.669
+    },
+    {
+      "x": 684.0,
+      "y": 461.09,
+      "t": 2.733
+    },
+    {
+      "x": 681.59,
+      "y": 462.12,
+      "t": 2.798
+    },
+    {
+      "x": 674.11,
+      "y": 462.39,
+      "t": 2.878
+    },
+    {
+      "x": 667.52,
+      "y": 465.23,
+      "t": 2.941
+    },
+    {
+      "x": 661.62,
+      "y": 466.92,
+      "t": 3.028
+    },
+    {
+      "x": 654.26,
+      "y": 471.33,
+      "t": 3.088
+    },
+    {
+      "x": 647.57,
+      "y": 477.67,
+      "t": 3.145
+    },
+    {
+      "x": 641.77,
+      "y": 485.2,
+      "t": 3.229
+    },
+    {
+      "x": 639.74,
+      "y": 494.03,
+      "t": 3.291
+    }
+  ],
+  "optimal_path": [
+    {
+      "x": 90.0,
+      "y": 110.0
+    },
+    {
+      "x": 375.0,
+      "y": 411.0
+    },
+    {
+      "x": 640.0,
+      "y": 530.0
+    }
+  ],
+  "level_name": "Conceptual Rehab Maze",
+  "game_performance_metrics": {
+    "completion_time_s": 3.291,
+    "minimum_distance": 705.0,
+    "actual_distance": 948.6,
+    "actual_distance_px": 948.6,
+    "path_length_px": 948.6,
+    "ideal_distance_px": 692.0,
+    "min_path_distance_px": 705.0,
+    "path_efficiency": 74.3,
+    "path_efficiency_ratio": 0.743,
+    "trajectory_accuracy": 8.7,
+    "mean_path_deviation_px": 117.5,
+    "max_path_deviation_px": 147.8,
+    "rms_path_deviation_px": 122.4,
+    "time_outside_route_s": 3.14,
+    "pct_time_outside": 97.6,
+    "deviation_events": 1,
+    "corridor_adherence_pct": 2.4,
+    "peak_speed_px_s": 4751.3,
+    "mean_speed_px_s": 275.5,
+    "smoothness_score": 77.1,
+    "game_smoothness_score": 77.1,
+    "normalised_jerk": 13511.6214,
+    "tremor_index": 0.2751,
+    "rom_width_px": 492.3,
+    "rom_height_px": 305.8,
+    "adaptive_recommendation": {
+      "action": "DECREASE",
+      "current_difficulty": "EASY",
+      "target_difficulty": "EASY",
+      "badge_title": "SUGGEST REPEATING",
+      "headline": "Suggest repeating current difficulty with focus on control.",
+      "rationale": "Observed 9% acc. Focus on calm, unhurried trajectory over speed.",
+      "criteria_met": {
+        "completion": true,
+        "accuracy": false,
+        "efficiency": false,
+        "smoothness": true,
+        "collisions": true
+      }
+    }
+  }
+}

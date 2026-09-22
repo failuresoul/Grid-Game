@@ -1,0 +1,323 @@
+{
+  "timestamp": "2026-09-22 06:35:27",
+  "session_id": "session_20260922_063527_bc3113f6",
+  "difficulty": "EASY",
+  "maze_seed": null,
+  "completion_status": "COMPLETED",
+  "completion_time": 3.44,
+  "actual_distance": 115.8,
+  "minimum_distance": 877.4,
+  "path_efficiency": 100.0,
+  "accuracy": 97.0,
+  "smoothness": 78.4,
+  "collision_count": 0,
+  "deviation_count": 0,
+  "trajectory": [
+    {
+      "x": 760.68,
+      "y": 227.85,
+      "t": 0.072
+    },
+    {
+      "x": 764.11,
+      "y": 227.93,
+      "t": 0.143
+    },
+    {
+      "x": 764.11,
+      "y": 227.93,
+      "t": 0.214
+    },
+    {
+      "x": 769.65,
+      "y": 228.95,
+      "t": 0.292
+    },
+    {
+      "x": 772.08,
+      "y": 229.92,
+      "t": 0.351
+    },
+    {
+      "x": 772.08,
+      "y": 229.92,
+      "t": 0.428
+    },
+    {
+      "x": 772.9,
+      "y": 233.04,
+      "t": 0.491
+    },
+    {
+      "x": 771.2,
+      "y": 233.95,
+      "t": 0.554
+    },
+    {
+      "x": 768.97,
+      "y": 235.69,
+      "t": 0.635
+    },
+    {
+      "x": 768.97,
+      "y": 235.69,
+      "t": 0.702
+    },
+    {
+      "x": 767.14,
+      "y": 234.63,
+      "t": 0.763
+    },
+    {
+      "x": 766.49,
+      "y": 232.01,
+      "t": 0.845
+    },
+    {
+      "x": 766.21,
+      "y": 229.28,
+      "t": 0.906
+    },
+    {
+      "x": 769.27,
+      "y": 225.12,
+      "t": 0.987
+    },
+    {
+      "x": 772.37,
+      "y": 223.35,
+      "t": 1.053
+    },
+    {
+      "x": 774.32,
+      "y": 221.99,
+      "t": 1.116
+    },
+    {
+      "x": 774.32,
+      "y": 221.99,
+      "t": 1.195
+    },
+    {
+      "x": 774.32,
+      "y": 221.99,
+      "t": 1.258
+    },
+    {
+      "x": 774.32,
+      "y": 221.99,
+      "t": 1.32
+    },
+    {
+      "x": 775.7,
+      "y": 223.28,
+      "t": 1.404
+    },
+    {
+      "x": 774.2,
+      "y": 222.8,
+      "t": 1.468
+    },
+    {
+      "x": 774.2,
+      "y": 222.8,
+      "t": 1.547
+    },
+    {
+      "x": 772.03,
+      "y": 223.06,
+      "t": 1.61
+    },
+    {
+      "x": 772.03,
+      "y": 223.06,
+      "t": 1.677
+    },
+    {
+      "x": 772.03,
+      "y": 223.06,
+      "t": 1.755
+    },
+    {
+      "x": 772.03,
+      "y": 223.06,
+      "t": 1.82
+    },
+    {
+      "x": 772.03,
+      "y": 223.06,
+      "t": 1.885
+    },
+    {
+      "x": 772.03,
+      "y": 223.06,
+      "t": 1.963
+    },
+    {
+      "x": 778.57,
+      "y": 220.37,
+      "t": 2.025
+    },
+    {
+      "x": 783.74,
+      "y": 217.29,
+      "t": 2.109
+    },
+    {
+      "x": 790.21,
+      "y": 212.76,
+      "t": 2.171
+    },
+    {
+      "x": 796.48,
+      "y": 210.23,
+      "t": 2.235
+    },
+    {
+      "x": 801.08,
+      "y": 208.61,
+      "t": 2.32
+    },
+    {
+      "x": 801.08,
+      "y": 208.61,
+      "t": 2.38
+    },
+    {
+      "x": 805.26,
+      "y": 205.58,
+      "t": 2.444
+    },
+    {
+      "x": 806.63,
+      "y": 203.8,
+      "t": 2.524
+    },
+    {
+      "x": 808.58,
+      "y": 201.99,
+      "t": 2.587
+    },
+    {
+      "x": 809.6,
+      "y": 200.6,
+      "t": 2.667
+    },
+    {
+      "x": 809.6,
+      "y": 200.6,
+      "t": 2.732
+    },
+    {
+      "x": 813.21,
+      "y": 197.46,
+      "t": 2.796
+    },
+    {
+      "x": 814.91,
+      "y": 194.55,
+      "t": 2.875
+    },
+    {
+      "x": 816.62,
+      "y": 191.21,
+      "t": 2.942
+    },
+    {
+      "x": 819.11,
+      "y": 190.86,
+      "t": 3.006
+    },
+    {
+      "x": 820.17,
+      "y": 188.29,
+      "t": 3.083
+    },
+    {
+      "x": 820.96,
+      "y": 185.53,
+      "t": 3.15
+    },
+    {
+      "x": 821.34,
+      "y": 183.62,
+      "t": 3.227
+    },
+    {
+      "x": 821.34,
+      "y": 183.62,
+      "t": 3.291
+    },
+    {
+      "x": 822.77,
+      "y": 181.41,
+      "t": 3.359
+    },
+    {
+      "x": 824.51,
+      "y": 179.29,
+      "t": 3.435
+    }
+  ],
+  "optimal_path": [
+    {
+      "x": 140.0,
+      "y": 560.0
+    },
+    {
+      "x": 389.0,
+      "y": 347.0
+    },
+    {
+      "x": 611.0,
+      "y": 353.0
+    },
+    {
+      "x": 860.0,
+      "y": 140.0
+    }
+  ],
+  "level_name": "Easy-1: Gentle Flow",
+  "game_performance_metrics": {
+    "completion_time_s": 3.435,
+    "minimum_distance": 877.4,
+    "actual_distance": 115.8,
+    "actual_distance_px": 115.8,
+    "path_length_px": 115.8,
+    "ideal_distance_px": 833.5,
+    "min_path_distance_px": 877.4,
+    "path_efficiency": 100.0,
+    "path_efficiency_ratio": 1.0,
+    "trajectory_accuracy": 97.0,
+    "mean_path_deviation_px": 9.3,
+    "max_path_deviation_px": 14.2,
+    "rms_path_deviation_px": 9.8,
+    "time_outside_route_s": 0.0,
+    "pct_time_outside": 0.0,
+    "deviation_events": 0,
+    "corridor_adherence_pct": 100.0,
+    "peak_speed_px_s": 128.4,
+    "mean_speed_px_s": 34.8,
+    "smoothness_score": 78.4,
+    "game_smoothness_score": 78.4,
+    "normalised_jerk": 472.0797,
+    "tremor_index": 0.0419,
+    "rom_width_px": 63.8,
+    "rom_height_px": 56.4,
+    "adaptive_recommendation": {
+      "action": "INCREASE",
+      "current_difficulty": "EASY",
+      "target_difficulty": "MEDIUM",
+      "badge_title": "SUGGEST ADVANCING",
+      "headline": "Consistent high motor control. Suggest increasing to MEDIUM.",
+      "rationale": "High accuracy (97%), efficiency (100%), smoothness (78/100) with 0 wall hits.",
+      "criteria_met": {
+        "completion": true,
+        "accuracy": true,
+        "efficiency": true,
+        "smoothness": true,
+        "collisions": true
+      }
+    }
+  }
+}

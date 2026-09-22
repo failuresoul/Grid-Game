@@ -122,6 +122,18 @@ class MetricsCollector:
         """Freeze the buffer (no more samples accepted)."""
         self._active = False
 
+    def reset(self) -> None:
+        """
+        Clear all recorded data and mark collector as inactive.
+        Call this before a new session starts (e.g. after restart/replay).
+        Recording begins fresh when start_recording() is called next.
+        """
+        self._xs.clear()
+        self._ys.clear()
+        self._ts.clear()
+        self._total_time = 0.0
+        self._active = False
+
     # ─────────────────────────────────────────────────────────────────────────
     #  Metric computation
     # ─────────────────────────────────────────────────────────────────────────

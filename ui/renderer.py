@@ -87,6 +87,7 @@ class Renderer:
         debug_mode:        bool = False,
         algo_name:         str  = "",
         mouse_pos:         Optional[Tuple[float, float]] = None,
+        pip_pos:           Optional[Tuple[int, int]] = None,
     ) -> np.ndarray:
         """
         Render a complete gameplay frame.
@@ -100,6 +101,8 @@ class Renderer:
             raw_coords:        Raw unfiltered canvas coordinates before smoothing.
             debug_mode:        Whether to draw the real-time telemetry debug overlay.
             algo_name:         Name of active smoothing algorithm (e.g. ONE_EURO / EMA).
+            mouse_pos:         Optional mouse position for UI hover detection.
+            pip_pos:           Optional explicit (x, y) position of moveable PiP thumbnail.
 
         Returns:
             BGR ndarray (H × W × 3) ready for cv2.imshow().
@@ -121,7 +124,7 @@ class Renderer:
         # Only render gameplay HUD when active, not during results screen
         state = engine.state
         if state not in (GameState.COMPLETED, GameState.RESULTS, GameState.WIN):
-            self._draw_hud(canvas, engine, is_mouse_fallback, landmark_name)
+            self._draw_hud(canvas, engine, is_mouse_fallback, landmark_name, pip_pos=pip_pos)
 
         # Real-time telemetry debug overlay (Raw vs. Smoothed X,Y)
         if debug_mode:
@@ -129,7 +132,42 @@ class Renderer:
 
         # State overlays
         if state in (GameState.READY, GameState.WAITING):
-            draw_waiting_overlay(canvas, self.W, self.H, self._t)
+            # ── READY: gesture-start UI ──────────────────────────────────
+            # Draw a progress arc on the START circle showing hold progress.
+            # Game begins automatically when the arc completes (1.5 s hold).
+            progress = getattr(engine, "ready_hold_progress", 0.0)
+            sx, sy   = int(engine.level.start[0]), int(engine.level.start[1])
+            sr       = engine.level.start_r + engine.radius + 20
+
+            # Dim glow tint to draw attention to START
+            pulse = 0.6 + 0.4 * math.sin(self._t * 4.0)
+            cv2.circle(canvas, (sx, sy), sr + 6, (0, int(200 * pulse), 0), 2, cv2.LINE_AA)
+
+            if progress > 0.0:
+                # Green fill arc (progress 0 → 1 = 0° → 360°, starting top)
+                angle_end = int(progress * 360)
+                cv2.ellipse(
+                    canvas, (sx, sy), (sr, sr),
+                    angle=-90, startAngle=0, endAngle=angle_end,
+                    color=(0, 255, 100), thickness=5, lineType=cv2.LINE_AA,
+                )
+
+            # Instruction banner at the top of the screen
+            banner_y = 30
+            cv2.rectangle(canvas, (0, 0), (self.W, 60), (0, 0, 0), -1)
+            cv2.addWeighted(canvas[0:60, :], 0.45,
+                            np.zeros((60, self.W, 3), dtype=np.uint8), 0.55, 0,
+                            canvas[0:60, :])
+            if progress < 0.05:
+                msg = "Move your hand to the GREEN START circle to begin"
+            elif progress < 1.0:
+                pct = int(progress * 100)
+                msg = f"Hold at START...  {pct}%  (keep still)"
+            else:
+                msg = "Starting..."
+            (tw, _), _ = cv2.getTextSize(msg, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 1)
+            cv2.putText(canvas, msg, ((self.W - tw) // 2, 40),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 140), 2, cv2.LINE_AA)
         elif state == GameState.PAUSED:
             draw_paused_overlay(canvas, self.W, self.H)
         elif state in (GameState.COMPLETED, GameState.RESULTS, GameState.WIN):
@@ -171,7 +209,7 @@ class Renderer:
             )
 
         if pip_frame is not None and config.CAMERA_PIP_ENABLED:
-            self._draw_pip(canvas, pip_frame)
+            self._draw_pip(canvas, pip_frame, engine=engine, pip_pos=pip_pos)
 
         return canvas
 
@@ -348,6 +386,7 @@ class Renderer:
         engine: "GameEngine",
         is_mouse_fallback: bool = False,
         landmark_name: str = "",
+        pip_pos: Optional[Tuple[int, int]] = None,
     ) -> None:
         """
         Render clean clinical rehabilitation HUD:
@@ -407,7 +446,11 @@ class Renderer:
             eff_val = f"{engine.path_efficiency:4.1f}%"
 
         cw, ch = 215, 98
-        cx1 = W - cw - 20
+        # If PiP sits in the top-right corner, dynamically position Telemetry Card to its left
+        if pip_pos is not None and pip_pos[0] > (W - config.PIP_WIDTH - 40) and pip_pos[1] < 125:
+            cx1 = int(pip_pos[0]) - cw - 12
+        else:
+            cx1 = W - cw - 20
         cy1 = 14
 
         # Sleek, semi-transparent dark clinical card
@@ -507,24 +550,76 @@ class Renderer:
             cv2.drawMarker(canvas, ipt, (60, 220, 255), cv2.MARKER_CROSS, 8, 1, cv2.LINE_AA)
 
 
-    def _draw_pip(self, canvas: np.ndarray, cam_frame: np.ndarray) -> None:
+    def _draw_pip(
+        self,
+        canvas: np.ndarray,
+        cam_frame: np.ndarray,
+        engine: "GameEngine | None" = None,
+        pip_pos: Optional[Tuple[int, int]] = None,
+    ) -> None:
         pw, ph = config.PIP_WIDTH, config.PIP_HEIGHT
         try:
             thumb = cv2.resize(cam_frame, (pw, ph))
         except Exception:
             return
-        x1, y1 = self.W - pw - 10, 10
+
+        if pip_pos is not None:
+            x1 = max(5, min(self.W - pw - 5, int(pip_pos[0])))
+            y1 = max(5, min(self.H - ph - 25, int(pip_pos[1])))
+        else:
+            # Smart corner: pick the canvas corner farthest from START and END zones
+            # that avoids overlapping obstacles.
+            margin = 12
+            corners = [
+                (margin,            margin),                     # Top-Left
+                (self.W - pw - margin, margin),                  # Top-Right
+                (margin,            self.H - ph - margin - 20),  # Bottom-Left
+                (self.W - pw - margin, self.H - ph - margin - 20),  # Bottom-Right
+            ]
+
+            best_corner = corners[1]   # default: top-right
+            if engine is not None:
+                sx, sy = engine.level.start
+                ex, ey = engine.level.end
+                best_score = -1e9
+                for cx, cy in corners:
+                    pcx = cx + pw // 2
+                    pcy = cy + ph // 2
+                    d_start = math.hypot(pcx - sx, pcy - sy)
+                    d_end = math.hypot(pcx - ex, pcy - ey)
+                    # Check overlap with any obstacles
+                    collides = False
+                    for obs in getattr(engine.level, "walls", []):
+                        if hasattr(obs, "as_rect"):
+                            ox, oy, ow, oh = obs.as_rect()
+                        elif isinstance(obs, (tuple, list)) and len(obs) == 4:
+                            ox, oy, ow, oh = obs
+                        else:
+                            continue
+                        if not (cx + pw < ox or cx > ox + ow or cy + ph < oy or cy > oy + oh):
+                            collides = True
+                            break
+                    score = min(d_start, d_end) - (5000.0 if collides else 0.0)
+                    if score > best_score:
+                        best_score = score
+                        best_corner = (cx, cy)
+            x1, y1 = best_corner
+
         x2, y2 = x1 + pw, y1 + ph
 
         overlay = canvas.copy()
-        cv2.rectangle(overlay, (x1 - 3, y1 - 3), (x2 + 3, y2 + 3), (30, 40, 60), -1)
-        cv2.addWeighted(overlay, 0.7, canvas, 0.3, 0, canvas)
+        cv2.rectangle(overlay, (x1 - 3, y1 - 3), (x2 + 3, y2 + 3), (20, 26, 38), -1)
+        cv2.addWeighted(overlay, 0.75, canvas, 0.25, 0, canvas)
 
         canvas[y1:y2, x1:x2] = thumb
         cv2.rectangle(canvas, (x1 - 1, y1 - 1), (x2 + 1, y2 + 1),
-                      (80, 130, 200), 1, cv2.LINE_AA)
-        draw_text(canvas, "Camera", (x1, y2 + 14),
-                  font_scale=0.38, color=(100, 140, 180))
+                      (80, 140, 220), 1, cv2.LINE_AA)
+
+        # Draggable header handle
+        cv2.rectangle(canvas, (x1, y1), (x1 + pw, y1 + 16), (18, 25, 36), -1)
+        cv2.putText(canvas, "CAM [DRAG / MOVE]", (x1 + 6, y1 + 12),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.34, (180, 215, 245), 1, cv2.LINE_AA)
+
 
     # ─────────────────────────────────────────────────────────────────────────
     #  Background gradient

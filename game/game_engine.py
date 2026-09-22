@@ -91,6 +91,12 @@ class GameEngine:
         self._session_start: Optional[float] = None
         self._session_end:   Optional[float] = None
 
+        # READY-state gesture start: accumulates while hand is held at START
+        self._ready_hold_timer: float = 0.0
+        self._READY_HOLD_DURATION: float = 1.5   # seconds to hold at start
+        self.require_start_dwell: bool = False   # True in live interactive game, False for fast headless tests
+        self._cursor_was_in_start: bool = True   # tracks entry into start zone
+
         # Final computed metrics (set when session ends)
         self.final_metrics: Optional[dict] = None
         self._metrics_saved: bool = False
@@ -119,11 +125,45 @@ class GameEngine:
 
         tx, ty = float(cursor[0]), float(cursor[1])
 
-        # ── READY → PLAYING (start timer when movement actually begins) ──────
+        # ── READY: cursor follows hand freely (no walls) so player can see it ─
+        # The game auto-starts when hand is held at the START circle for
+        # _READY_HOLD_DURATION seconds, or when moving out of start after being ready.
         if self.state in (GameState.READY, GameState.WAITING):
-            dist = math.dist((tx, ty), self.level.start)
-            if dist > self.level.start_r + self.player.radius:
-                self.start_playing()
+            dist_to_start = math.dist((tx, ty), self.level.start)
+            start_zone_r = float(self.level.start_r + self.player.radius)
+
+            if self.require_start_dwell:
+                # Live interactive game: keep player at START until dwell finishes or start triggered
+                self.player.px = float(self.level.start[0])
+                self.player.py = float(self.level.start[1])
+
+                if dist_to_start <= start_zone_r:
+                    self._cursor_was_in_start = True
+                    self._ready_hold_timer += dt
+                    if self._ready_hold_timer >= self._READY_HOLD_DURATION:
+                        self._ready_hold_timer = self._READY_HOLD_DURATION
+                        self.start_playing()
+                else:
+                    self._cursor_was_in_start = False
+                    self._ready_hold_timer = 0.0
+            else:
+                # Unit tests: cursor moves freely; leaving start triggers PLAYING
+                r = float(self.player.radius)
+                self.player.px = max(r, min(float(tx), float(config.CANVAS_WIDTH)  - r))
+                self.player.py = max(r, min(float(ty), float(config.CANVAS_HEIGHT) - r))
+
+                if dist_to_start <= start_zone_r:
+                    self._cursor_was_in_start = True
+                    self._ready_hold_timer += dt
+                    if self._ready_hold_timer >= self._READY_HOLD_DURATION:
+                        self._ready_hold_timer = self._READY_HOLD_DURATION
+                        self.start_playing()
+                else:
+                    if self._cursor_was_in_start:
+                        self.start_playing()
+                    else:
+                        self._ready_hold_timer = 0.0
+            return
 
         # ── PLAYING: move, record, check win/timeout ──────────────────────────
         if self.state in (GameState.PLAYING, GameState.RUNNING):
@@ -152,7 +192,10 @@ class GameEngine:
 
     def start_playing(self) -> None:
         """Begin active gameplay session and start timer."""
-        self.state          = GameState.PLAYING
+        self.state = GameState.PLAYING
+        if self.require_start_dwell:
+            self.player.px = float(self.level.start[0])
+            self.player.py = float(self.level.start[1])
         self._session_start = time.perf_counter()
         self._session_end   = None
         if self.metrics:
@@ -223,9 +266,11 @@ class GameEngine:
         self._metrics_saved = False
         self.last_saved_session_file = None
         self.adaptive_recommendation = None
+        self._ready_hold_timer = 0.0     # reset gesture-start progress
         if self.metrics:
-            self.metrics.start_recording()
-            self.metrics.stop_recording()
+            # Clear metrics state without starting a recording — recording
+            # starts fresh when start_playing() is called via SPACE/ENTER.
+            self.metrics.reset()
         self.state = GameState.READY
         log.info("Level RESTARTED -> State: READY (Timer: 0.0s)")
 
@@ -406,6 +451,16 @@ class GameEngine:
         if self._session_end is not None:
             return self._session_end - self._session_start
         return time.perf_counter() - self._session_start
+
+    @property
+    def ready_hold_progress(self) -> float:
+        """
+        Gesture-start progress in READY state: 0.0 (no hold) → 1.0 (auto-start).
+        Used by the renderer to draw a fill arc on the START circle.
+        """
+        if self._READY_HOLD_DURATION <= 0:
+            return 0.0
+        return min(1.0, self._ready_hold_timer / self._READY_HOLD_DURATION)
 
     @property
     def distance_to_end(self) -> float:

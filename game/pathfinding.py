@@ -33,8 +33,8 @@ def calculate_minimum_path(
     player_radius: float,
     width: int = config.CANVAS_WIDTH,
     height: int = config.CANVAS_HEIGHT,
-    margin: float = 1.0,
-    grid_step: int = 6,
+    margin: float = 2.0,
+    grid_step: int = 4,
 ) -> Tuple[float, List[Tuple[float, float]]]:
     """
     Compute the shortest collision-free route from start to end considering player radius.
@@ -47,7 +47,10 @@ def calculate_minimum_path(
         width:         Canvas width (px).
         height:        Canvas height (px).
         margin:        Safety clearance margin added to player_radius (px).
-        grid_step:     A* discretization step (px). Default 6px for high fidelity.
+                       Default 2.0 — provides sub-pixel clearance so that paths
+                       graze obstacles cleanly without triggering CCD collisions.
+        grid_step:     A* discretization step (px). Default 4px for higher fidelity
+                       (smaller = more accurate minimum path, slower to compute).
 
     Returns:
         (minimum_path_distance, shortest_path_points)
@@ -92,7 +95,7 @@ def calculate_minimum_path(
         dist = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
         if dist < 1.0:
             return True
-        sub_steps = max(2, int(dist // 3))
+        sub_steps = max(4, int(dist // 2))
         dx = (p2[0] - p1[0]) / sub_steps
         dy = (p2[1] - p1[1]) / sub_steps
         for s in range(sub_steps + 1):
@@ -238,7 +241,7 @@ def minimum_path_distance(
     player_radius: Optional[float] = None,
     width: int = config.CANVAS_WIDTH,
     height: int = config.CANVAS_HEIGHT,
-    margin: float = 1.0,
+    margin: float = 2.0,   # 2.0px safety clearance avoids continuous collision triggers
 ) -> float:
     """
     Convenience function to compute and return purely the minimum_path_distance.
@@ -279,7 +282,7 @@ def minimum_path_distance(
 def solve_level_path(
     level: Any,
     player_radius: float,
-    margin: float = 1.0,
+    margin: float = 2.0,   # 2.0px clearance prevents collision on corners
 ) -> Tuple[float, List[Point]]:
     """
     Calculate the minimum path for a Level instance and store the results

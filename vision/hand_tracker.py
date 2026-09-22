@@ -29,8 +29,10 @@ Dependency chain:
 """
 
 from __future__ import annotations
+import contextlib
 import logging
 import os
+import sys
 import urllib.request
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
@@ -46,6 +48,34 @@ import config
 from vision.smoothing import ExponentialMovingAverage, OneEuroFilter2D, create_smoother
 
 log = logging.getLogger(__name__)
+
+
+@contextlib.contextmanager
+def _muted_c_io():
+    """
+    Temporarily redirect OS-level file descriptors 1 (stdout) and 2 (stderr)
+    to /dev/null.  This is the only reliable way to silence MediaPipe/TFLite
+    C++ messages that write directly to the OS file descriptors and therefore
+    bypass Python's sys.stdout / sys.stderr and environment-variable filters.
+    """
+    devnull_fd = os.open(os.devnull, os.O_WRONLY)
+    saved_out = os.dup(1)
+    saved_err = os.dup(2)
+    try:
+        # Flush Python-level buffers first so nothing is lost
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os.dup2(devnull_fd, 1)
+        os.dup2(devnull_fd, 2)
+        os.close(devnull_fd)
+        yield
+    finally:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os.dup2(saved_out, 1)
+        os.dup2(saved_err, 2)
+        os.close(saved_out)
+        os.close(saved_err)
 
 # ---- Model file -------------------------------------------------------------
 _MODEL_URL = (
@@ -154,8 +184,12 @@ class HandTracker:
             min_hand_presence_confidence=detection_confidence,
             min_tracking_confidence=tracking_confidence,
         )
-        self._landmarker  = mp_vision.HandLandmarker.create_from_options(options)
-        self._frame_ts_ms = 0      # monotonically increasing timestamp (ms)
+        # Wrap model-load in C-level I/O mute to suppress TFLite delegate
+        # messages and inference_feedback_manager warnings.
+        with _muted_c_io():
+            self._landmarker = mp_vision.HandLandmarker.create_from_options(options)
+        self._frame_ts_ms  = 0     # monotonically increasing timestamp (ms)
+        self._suppress_frames = 3  # mute C++ output for first N detect calls
 
         # Coordinate smoother (adaptive OneEuroFilter2D or EMA, configurable from config.py)
         algo = getattr(config, "SMOOTHING_ALGORITHM", "ONE_EURO")
@@ -224,7 +258,9 @@ class HandTracker:
 
     def close(self) -> None:
         """Release MediaPipe resources."""
-        self._landmarker.close()
+        # Mute C++ cleanup messages (clearcut telemetry uploader errors, etc.)
+        with _muted_c_io():
+            self._landmarker.close()
         log.info("HandTracker closed.")
 
     # -------------------------------------------------------------------------
@@ -269,10 +305,18 @@ class HandTracker:
         self._frame_ts_ms += 33
 
         # 2. Hand detection via MediaPipe Tasks
+        # For the first few frames, mute C-level output to swallow the
+        # one-time "NORM_RECT without IMAGE_DIMENSIONS" warning from
+        # landmark_projection_calculator.cc (a harmless MediaPipe quirk).
         try:
             rgb      = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-            result   = self._landmarker.detect_for_video(mp_image, self._frame_ts_ms)
+            if self._suppress_frames > 0:
+                with _muted_c_io():
+                    result = self._landmarker.detect_for_video(mp_image, self._frame_ts_ms)
+                self._suppress_frames -= 1
+            else:
+                result = self._landmarker.detect_for_video(mp_image, self._frame_ts_ms)
         except Exception as e:
             log.warning(f"MediaPipe detection error (frame ignored): {e}")
             self._handle_no_hand(annotated=bgr_frame.copy())

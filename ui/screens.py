@@ -178,43 +178,107 @@ def draw_start_screen(
     draw_text(canvas, sensor_info, ((W - sis[0]) // 2, 175),
               font_scale=0.40, color=(125, 150, 175))
 
-    # Difficulty buttons
+    # Difficulty buttons (1: Easy, 2: Medium, 3: Hard)
     labels = {
-        1: ("1  EASY",   config.EASY),
-        2: ("2  MEDIUM", config.MEDIUM),
-        3: ("3  HARD",   config.HARD),
+        1: ("1  EASY",   (50, 200, 80)),
+        2: ("2  MEDIUM", (30, 180, 255)),
+        3: ("3  HARD",   (70, 80, 235)),
     }
-    btn_colors = {1: (50, 200, 80), 2: (30, 180, 255), 3: (60, 60, 220)}
 
-    for diff, (label, _) in labels.items():
-        bx, by, bw, bh = W // 2 - 150, 220 + (diff - 1) * 100, 300, 60
-        col = btn_colors[diff]
-        if diff == selected_difficulty:
-            cv2.rectangle(canvas, (bx - 4, by - 4), (bx + bw + 4, by + bh + 4),
-                          col, 2, cv2.LINE_AA)
+    bw, bh = 320, 50
+    bx = W // 2 - bw // 2
+    for diff, (label, col) in labels.items():
+        by = 195 + (diff - 1) * 58
+        is_sel = (diff == selected_difficulty)
+        if is_sel:
+            cv2.rectangle(canvas, (bx - 3, by - 3), (bx + bw + 3, by + bh + 3), col, 2, cv2.LINE_AA)
             cv2.rectangle(canvas, (bx, by), (bx + bw, by + bh), col, -1)
-            text_col = (10, 10, 10)
+            text_col = (15, 20, 25)
+            # Checkmark indicator
+            cv2.putText(canvas, "[ACTIVE]", (bx + bw - 85, by + 32),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, text_col, 2, cv2.LINE_AA)
         else:
-            cv2.rectangle(canvas, (bx, by), (bx + bw, by + bh), (40, 40, 60), -1)
+            cv2.rectangle(canvas, (bx, by), (bx + bw, by + bh), (30, 38, 52), -1)
             cv2.rectangle(canvas, (bx, by), (bx + bw, by + bh), col, 1, cv2.LINE_AA)
             text_col = col
-        ls = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)[0]
-        draw_text(canvas, label,
-                  (bx + (bw - ls[0]) // 2, by + (bh + ls[1]) // 2),
-                  font_scale=0.8, color=text_col, thickness=2, shadow=False)
 
-    # Key-binding hints
-    for i, line in enumerate([
-        "ENTER / SPACE  ->  Select Level",
-        "1 / 2 / 3      ->  Change difficulty",
-        "H              ->  View Progress & History (Sessions & Trends)",
-        "L              ->  Cycle tracked landmark",
-        "D              ->  Toggle debug telemetry",
-        "M              ->  Toggle mouse fallback",
-        "ESC            ->  Quit",
-    ]):
-        draw_text(canvas, line, (W // 2 - 200, 555 + i * 24),
-                  font_scale=0.48, color=(140, 180, 210))
+        ls = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.72, 2)[0]
+        draw_text(canvas, label, (bx + 25, by + (bh + ls[1]) // 2),
+                  font_scale=0.72, color=text_col, thickness=2, shadow=False)
+
+    # Prominent START GAME button
+    start_by = 385
+    start_bh = 58
+    cv2.rectangle(canvas, (bx - 2, start_by - 2), (bx + bw + 2, start_by + start_bh + 2), (0, 255, 140), 2, cv2.LINE_AA)
+    overlay_btn = canvas.copy()
+    cv2.rectangle(overlay_btn, (bx, start_by), (bx + bw, start_by + start_bh), (0, 180, 100), -1)
+    cv2.addWeighted(overlay_btn, 0.85, canvas, 0.15, 0, canvas)
+    start_lbl = "START GAME  [ENTER]"
+    sls = cv2.getTextSize(start_lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.75, 2)[0]
+    draw_text(canvas, start_lbl, (bx + (bw - sls[0]) // 2, start_by + (start_bh + sls[1]) // 2),
+              font_scale=0.75, color=(255, 255, 255), thickness=2, shadow=True)
+
+    # PROGRESS & HISTORY button
+    hist_by = 455
+    hist_bh = 46
+    cv2.rectangle(canvas, (bx, hist_by), (bx + bw, hist_by + hist_bh), (35, 45, 65), -1)
+    cv2.rectangle(canvas, (bx, hist_by), (bx + bw, hist_by + hist_bh), (60, 160, 230), 1, cv2.LINE_AA)
+    hist_lbl = "PROGRESS & HISTORY  [H]"
+    hls = cv2.getTextSize(hist_lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.58, 1)[0]
+    draw_text(canvas, hist_lbl, (bx + (bw - hls[0]) // 2, hist_by + (hist_bh + hls[1]) // 2),
+              font_scale=0.58, color=(200, 230, 255), thickness=1, shadow=False)
+
+    # MOVE CAMERA button
+    cam_by = 512
+    cam_bh = 42
+    cv2.rectangle(canvas, (bx, cam_by), (bx + bw, cam_by + cam_bh), (28, 36, 48), -1)
+    cv2.rectangle(canvas, (bx, cam_by), (bx + bw, cam_by + cam_bh), (100, 130, 170), 1, cv2.LINE_AA)
+    cam_lbl = "MOVE CAMERA CORNER  [V]"
+    cls = cv2.getTextSize(cam_lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.50, 1)[0]
+    draw_text(canvas, cam_lbl, (bx + (bw - cls[0]) // 2, cam_by + (cam_bh + cls[1]) // 2),
+              font_scale=0.50, color=(160, 195, 225), thickness=1, shadow=False)
+
+    # Instruction footnote
+    foot = "Hover hand cursor over any button for 1.5s to select  |  Full Hand Gesture Control"
+    fs = cv2.getTextSize(foot, cv2.FONT_HERSHEY_SIMPLEX, 0.46, 1)[0]
+    draw_text(canvas, foot, ((W - fs[0]) // 2, 590),
+              font_scale=0.46, color=(120, 165, 195))
+
+
+def get_menu_button_rects(
+    W: int,
+    H: int,
+) -> List[Tuple[str, Tuple[int, int, int, int], str, str]]:
+    """
+    Return gesture-activatable button rects for the MENU screen.
+    Format: (button_id, (x, y, w, h), label, shortcut_key)
+    """
+    bw = 320
+    bx = W // 2 - bw // 2
+    return [
+        ("DIFF_1",      (bx, 195, bw, 50), "1  EASY",                 "1"),
+        ("DIFF_2",      (bx, 253, bw, 50), "2  MEDIUM",               "2"),
+        ("DIFF_3",      (bx, 311, bw, 50), "3  HARD",                 "3"),
+        ("START",       (bx, 385, bw, 58), "START GAME",              "ENTER"),
+        ("HISTORY",     (bx, 455, bw, 46), "PROGRESS & HISTORY",      "H"),
+        ("MOVE_CAMERA", (bx, 512, bw, 42), "MOVE CAMERA CORNER",       "V"),
+    ]
+
+
+def get_level_select_button_rects(
+    W: int,
+    H: int,
+) -> List[Tuple[str, Tuple[int, int, int, int], str, str]]:
+    """
+    Return gesture-activatable button rects for the LEVEL_SELECT screen.
+    """
+    return [
+        ("PREV_LEVEL",  (W // 2 - 270, 420, 120, 52), "< PREV",            "P"),
+        ("CONFIRM",     (W // 2 - 135, 420, 270, 52), "CONFIRM & LOAD",     "ENTER"),
+        ("NEXT_LEVEL",  (W // 2 + 150, 420, 120, 52), "NEXT >",            "N"),
+        ("BACK",        (W // 2 - 135, 485, 270, 44), "BACK TO MENU",       "ESC"),
+        ("MOVE_CAMERA", (W // 2 - 135, 540, 270, 38), "MOVE CAMERA CORNER", "V"),
+    ]
 
 
 def draw_level_select_screen(
@@ -236,54 +300,90 @@ def draw_level_select_screen(
 
     # Title
     title = "SELECT MAZE LEVEL"
-    ts = cv2.getTextSize(title, cv2.FONT_HERSHEY_SIMPLEX, 1.3, 2)[0]
-    draw_text(canvas, title, ((W - ts[0]) // 2, 85),
-              font_scale=1.3, color=(120, 220, 255), thickness=2)
+    ts = cv2.getTextSize(title, cv2.FONT_HERSHEY_SIMPLEX, 1.25, 2)[0]
+    draw_text(canvas, title, ((W - ts[0]) // 2, 65),
+              font_scale=1.25, color=(120, 220, 255), thickness=2)
 
-    diff_label = f"DIFFICULTY: {difficulty_name.upper()}  (Press 1, 2, 3 to switch)"
-    ds = cv2.getTextSize(diff_label, cv2.FONT_HERSHEY_SIMPLEX, 0.62, 1)[0]
-    draw_text(canvas, diff_label, ((W - ds[0]) // 2, 130),
-              font_scale=0.62, color=(160, 200, 230))
+    diff_label = f"DIFFICULTY: {difficulty_name.upper()}  (Hover buttons or use hand gestures)"
+    ds = cv2.getTextSize(diff_label, cv2.FONT_HERSHEY_SIMPLEX, 0.52, 1)[0]
+    draw_text(canvas, diff_label, ((W - ds[0]) // 2, 102),
+              font_scale=0.52, color=(160, 200, 230))
 
     # Level Card Box
-    bx, by, bw, bh = W // 2 - 270, 170, 540, 300
+    bx, by, bw, bh = W // 2 - 270, 125, 540, 275
     cv2.rectangle(canvas, (bx, by), (bx + bw, by + bh), (22, 32, 48), -1)
     cv2.rectangle(canvas, (bx, by), (bx + bw, by + bh), (50, 160, 220), 2)
 
     # Card content
     header = f"Level {level_index + 1} of {total_levels}"
-    draw_text(canvas, header, (bx + 35, by + 45), font_scale=0.65, color=(255, 200, 80), thickness=2)
+    draw_text(canvas, header, (bx + 35, by + 40), font_scale=0.62, color=(255, 200, 80), thickness=2)
 
     lvl_title = f"{level_name}"
-    draw_text(canvas, lvl_title, (bx + 35, by + 90), font_scale=0.85, color=(230, 240, 255), thickness=2)
+    draw_text(canvas, lvl_title, (bx + 35, by + 82), font_scale=0.82, color=(230, 240, 255), thickness=2)
 
     # Details
     draw_text(canvas, f"Optimal Minimum Path:   {min_path_distance:.1f} px",
-              (bx + 35, by + 145), font_scale=0.58, color=(180, 210, 235))
+              (bx + 35, by + 130), font_scale=0.56, color=(180, 210, 235))
     draw_text(canvas, f"Geometric Obstacles:    {wall_count} barriers",
-              (bx + 35, by + 185), font_scale=0.58, color=(180, 210, 235))
+              (bx + 35, by + 168), font_scale=0.56, color=(180, 210, 235))
     draw_text(canvas, f"Movement Space:         Continuous 2D free navigation",
-              (bx + 35, by + 225), font_scale=0.55, color=(140, 185, 215))
+              (bx + 35, by + 206), font_scale=0.52, color=(140, 185, 215))
     draw_text(canvas, f"Status:                 READY to load",
-              (bx + 35, by + 265), font_scale=0.55, color=(100, 230, 160))
+              (bx + 35, by + 244), font_scale=0.52, color=(100, 230, 160))
 
-    # Pulsing selection prompt
-    pulse = 0.8 + 0.2 * math.sin(anim_t * 4.0)
-    prompt_col = tuple(int(c * pulse) for c in (80, 255, 160))
-    confirm_text = "Press ENTER or SPACE to Load Level"
-    cs = cv2.getTextSize(confirm_text, cv2.FONT_HERSHEY_SIMPLEX, 0.75, 2)[0]
-    draw_text(canvas, confirm_text, ((W - cs[0]) // 2, 515),
-              font_scale=0.75, color=prompt_col, thickness=2)
+    # Action Buttons:
+    # 1. PREV
+    p_bx, p_by, p_bw, p_bh = W // 2 - 270, 420, 120, 52
+    cv2.rectangle(canvas, (p_bx, p_by), (p_bx + p_bw, p_by + p_bh), (28, 38, 54), -1)
+    cv2.rectangle(canvas, (p_bx, p_by), (p_bx + p_bw, p_by + p_bh), (65, 120, 180), 1, cv2.LINE_AA)
+    p_txt = "< PREV [P]"
+    pts = cv2.getTextSize(p_txt, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 1)[0]
+    draw_text(canvas, p_txt, (p_bx + (p_bw - pts[0]) // 2, p_by + (p_bh + pts[1]) // 2),
+              font_scale=0.48, color=(200, 230, 255))
+
+    # 2. CONFIRM & LOAD (Prominent Green)
+    c_bx, c_by, c_bw, c_bh = W // 2 - 135, 420, 270, 52
+    cv2.rectangle(canvas, (c_bx - 2, c_by - 2), (c_bx + c_bw + 2, c_by + c_bh + 2), (0, 255, 140), 2, cv2.LINE_AA)
+    overlay_c = canvas.copy()
+    cv2.rectangle(overlay_c, (c_bx, c_by), (c_bx + c_bw, c_by + c_bh), (0, 175, 95), -1)
+    cv2.addWeighted(overlay_c, 0.85, canvas, 0.15, 0, canvas)
+    c_txt = "LOAD & PLAY  [ENTER]"
+    cts = cv2.getTextSize(c_txt, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2)[0]
+    draw_text(canvas, c_txt, (c_bx + (c_bw - cts[0]) // 2, c_by + (c_bh + cts[1]) // 2),
+              font_scale=0.65, color=(255, 255, 255), thickness=2)
+
+    # 3. NEXT
+    n_bx, n_by, n_bw, n_bh = W // 2 + 150, 420, 120, 52
+    cv2.rectangle(canvas, (n_bx, n_by), (n_bx + n_bw, n_by + n_bh), (28, 38, 54), -1)
+    cv2.rectangle(canvas, (n_bx, n_by), (n_bx + n_bw, n_by + n_bh), (65, 120, 180), 1, cv2.LINE_AA)
+    n_txt = "NEXT > [N]"
+    nts = cv2.getTextSize(n_txt, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 1)[0]
+    draw_text(canvas, n_txt, (n_bx + (n_bw - nts[0]) // 2, n_by + (n_bh + nts[1]) // 2),
+              font_scale=0.48, color=(200, 230, 255))
+
+    # 4. BACK TO MENU
+    b_bx, b_by, b_bw, b_bh = W // 2 - 135, 485, 270, 44
+    cv2.rectangle(canvas, (b_bx, b_by), (b_bx + b_bw, b_by + b_bh), (25, 34, 48), -1)
+    cv2.rectangle(canvas, (b_bx, b_by), (b_bx + b_bw, b_by + b_bh), (60, 95, 140), 1, cv2.LINE_AA)
+    b_txt = "< BACK TO MENU  [ESC]"
+    bts = cv2.getTextSize(b_txt, cv2.FONT_HERSHEY_SIMPLEX, 0.50, 1)[0]
+    draw_text(canvas, b_txt, (b_bx + (b_bw - bts[0]) // 2, b_by + (b_bh + bts[1]) // 2),
+              font_scale=0.50, color=(170, 205, 235))
+
+    # 5. MOVE CAMERA CORNER
+    m_bx, m_by, m_bw, m_bh = W // 2 - 135, 540, 270, 38
+    cv2.rectangle(canvas, (m_bx, m_by), (m_bx + m_bw, m_by + m_bh), (22, 30, 42), -1)
+    cv2.rectangle(canvas, (m_bx, m_by), (m_bx + m_bw, m_by + m_bh), (80, 110, 150), 1, cv2.LINE_AA)
+    m_txt = "MOVE CAMERA CORNER  [V]"
+    mts = cv2.getTextSize(m_txt, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)[0]
+    draw_text(canvas, m_txt, (m_bx + (m_bw - mts[0]) // 2, m_by + (m_bh + mts[1]) // 2),
+              font_scale=0.45, color=(150, 185, 215))
 
     # Navigation instructions
-    nav_hints = [
-        "LEFT / RIGHT or N / P  ->  Previous / Next Level",
-        "1 / 2 / 3              ->  Change Difficulty (Easy / Med / Hard)",
-        "M / ESC                ->  Return to Main Menu",
-    ]
-    for i, line in enumerate(nav_hints):
-        draw_text(canvas, line, (W // 2 - 230, 565 + i * 28),
-                  font_scale=0.52, color=(140, 175, 205))
+    foot = "Hold hand cursor over any button for 1.5s to select  |  Full Hand Gesture Control"
+    fs = cv2.getTextSize(foot, cv2.FONT_HERSHEY_SIMPLEX, 0.44, 1)[0]
+    draw_text(canvas, foot, ((W - fs[0]) // 2, 605),
+              font_scale=0.44, color=(120, 160, 190))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -320,19 +420,47 @@ def draw_waiting_overlay(canvas: np.ndarray, W: int, H: int, anim_t: float) -> N
 draw_ready_overlay = draw_waiting_overlay
 
 
+def get_paused_button_rects(
+    W: int,
+    H: int,
+) -> List[Tuple[str, Tuple[int, int, int, int], str, str]]:
+    """Return gesture buttons for the PAUSED overlay."""
+    return [
+        ("RESUME",    (W // 2 - 150, H // 2 + 10, 140, 48), "RESUME",        "P"),
+        ("MAIN_MENU", (W // 2 + 10,  H // 2 + 10, 140, 48), "QUIT TO MENU",  "M"),
+    ]
+
+
 def draw_paused_overlay(canvas: np.ndarray, W: int, H: int) -> None:
-    """Clinical paused state overlay."""
-    bw, bh = 340, 90
+    """Clinical paused state overlay with interactive gesture buttons."""
+    bw, bh = 360, 150
     bx, by = (W - bw) // 2, (H - bh) // 2
     overlay = canvas.copy()
     cv2.rectangle(overlay, (bx, by), (bx + bw, by + bh), (16, 20, 28), -1)
-    cv2.addWeighted(overlay, 0.88, canvas, 0.12, 0, canvas)
-    cv2.rectangle(canvas, (bx, by), (bx + bw, by + bh), (70, 95, 125), 1, cv2.LINE_AA)
+    cv2.addWeighted(overlay, 0.90, canvas, 0.10, 0, canvas)
+    cv2.rectangle(canvas, (bx, by), (bx + bw, by + bh), (70, 110, 155), 1, cv2.LINE_AA)
 
-    draw_text(canvas, "SESSION PAUSED", (bx + 55, by + 38),
+    pts = cv2.getTextSize("SESSION PAUSED", cv2.FONT_HERSHEY_SIMPLEX, 0.85, 2)[0]
+    draw_text(canvas, "SESSION PAUSED", (bx + (bw - pts[0]) // 2, by + 40),
               font_scale=0.85, color=(240, 245, 250), thickness=2)
-    draw_text(canvas, "Press P to continue", (bx + 85, by + 68),
-              font_scale=0.50, color=(140, 175, 210))
+
+    # 1. RESUME button
+    r_bx, r_by, r_bw, r_bh = W // 2 - 150, H // 2 + 10, 140, 48
+    cv2.rectangle(canvas, (r_bx, r_by), (r_bx + r_bw, r_by + r_bh), (0, 160, 90), -1)
+    cv2.rectangle(canvas, (r_bx, r_by), (r_bx + r_bw, r_by + r_bh), (0, 240, 130), 1, cv2.LINE_AA)
+    r_txt = "RESUME [P]"
+    rts = cv2.getTextSize(r_txt, cv2.FONT_HERSHEY_SIMPLEX, 0.50, 1)[0]
+    draw_text(canvas, r_txt, (r_bx + (r_bw - rts[0]) // 2, r_by + (r_bh + rts[1]) // 2),
+              font_scale=0.50, color=(255, 255, 255))
+
+    # 2. QUIT TO MENU button
+    q_bx, q_by, q_bw, q_bh = W // 2 + 10, H // 2 + 10, 140, 48
+    cv2.rectangle(canvas, (q_bx, q_by), (q_bx + q_bw, q_by + q_bh), (40, 45, 60), -1)
+    cv2.rectangle(canvas, (q_bx, q_by), (q_bx + q_bw, q_by + q_bh), (120, 140, 175), 1, cv2.LINE_AA)
+    q_txt = "MENU [M]"
+    qts = cv2.getTextSize(q_txt, cv2.FONT_HERSHEY_SIMPLEX, 0.50, 1)[0]
+    draw_text(canvas, q_txt, (q_bx + (q_bw - qts[0]) // 2, q_by + (q_bh + qts[1]) // 2),
+              font_scale=0.50, color=(210, 230, 250))
 
 
 def get_results_button_rects(W: int = 800, H: int = 600) -> List[Tuple[str, Tuple[int, int, int, int], str, str]]:
