@@ -1,0 +1,352 @@
+{
+  "timestamp": "2026-09-22 11:46:08",
+  "session_id": "session_20260922_114608_1bab4d2f",
+  "difficulty": "MEDIUM",
+  "maze_seed": null,
+  "completion_status": "COMPLETED",
+  "completion_time": 3.57,
+  "actual_distance": 1115.0,
+  "minimum_distance": 1017.3,
+  "path_efficiency": 91.2,
+  "accuracy": 84.9,
+  "smoothness": 86.6,
+  "collision_count": 0,
+  "deviation_count": 1,
+  "trajectory": [
+    {
+      "x": 106.0,
+      "y": 583.0,
+      "t": 0.064
+    },
+    {
+      "x": 106.0,
+      "y": 583.0,
+      "t": 0.13
+    },
+    {
+      "x": 106.0,
+      "y": 583.0,
+      "t": 0.189
+    },
+    {
+      "x": 106.0,
+      "y": 583.0,
+      "t": 0.25
+    },
+    {
+      "x": 106.0,
+      "y": 583.0,
+      "t": 0.317
+    },
+    {
+      "x": 106.0,
+      "y": 583.0,
+      "t": 0.407
+    },
+    {
+      "x": 115.0,
+      "y": 583.0,
+      "t": 0.461
+    },
+    {
+      "x": 124.0,
+      "y": 580.0,
+      "t": 0.524
+    },
+    {
+      "x": 155.0,
+      "y": 567.0,
+      "t": 0.595
+    },
+    {
+      "x": 177.0,
+      "y": 560.0,
+      "t": 0.654
+    },
+    {
+      "x": 201.0,
+      "y": 557.0,
+      "t": 0.716
+    },
+    {
+      "x": 221.0,
+      "y": 554.0,
+      "t": 0.78
+    },
+    {
+      "x": 234.0,
+      "y": 555.0,
+      "t": 0.845
+    },
+    {
+      "x": 248.0,
+      "y": 566.0,
+      "t": 0.926
+    },
+    {
+      "x": 251.0,
+      "y": 570.0,
+      "t": 0.988
+    },
+    {
+      "x": 265.0,
+      "y": 574.0,
+      "t": 1.055
+    },
+    {
+      "x": 282.0,
+      "y": 573.0,
+      "t": 1.118
+    },
+    {
+      "x": 293.0,
+      "y": 565.0,
+      "t": 1.182
+    },
+    {
+      "x": 305.0,
+      "y": 521.0,
+      "t": 1.246
+    },
+    {
+      "x": 306.0,
+      "y": 503.0,
+      "t": 1.309
+    },
+    {
+      "x": 305.0,
+      "y": 473.0,
+      "t": 1.376
+    },
+    {
+      "x": 306.0,
+      "y": 441.0,
+      "t": 1.454
+    },
+    {
+      "x": 310.0,
+      "y": 419.0,
+      "t": 1.516
+    },
+    {
+      "x": 323.0,
+      "y": 389.0,
+      "t": 1.582
+    },
+    {
+      "x": 340.0,
+      "y": 373.0,
+      "t": 1.646
+    },
+    {
+      "x": 368.0,
+      "y": 361.0,
+      "t": 1.707
+    },
+    {
+      "x": 419.0,
+      "y": 342.0,
+      "t": 1.772
+    },
+    {
+      "x": 435.0,
+      "y": 337.0,
+      "t": 1.836
+    },
+    {
+      "x": 455.0,
+      "y": 337.0,
+      "t": 1.9
+    },
+    {
+      "x": 467.0,
+      "y": 337.0,
+      "t": 1.982
+    },
+    {
+      "x": 478.0,
+      "y": 342.0,
+      "t": 2.045
+    },
+    {
+      "x": 518.0,
+      "y": 355.0,
+      "t": 2.108
+    },
+    {
+      "x": 536.0,
+      "y": 367.0,
+      "t": 2.175
+    },
+    {
+      "x": 554.0,
+      "y": 383.0,
+      "t": 2.238
+    },
+    {
+      "x": 576.0,
+      "y": 399.0,
+      "t": 2.3
+    },
+    {
+      "x": 599.0,
+      "y": 407.0,
+      "t": 2.365
+    },
+    {
+      "x": 624.0,
+      "y": 410.0,
+      "t": 2.448
+    },
+    {
+      "x": 643.0,
+      "y": 412.0,
+      "t": 2.51
+    },
+    {
+      "x": 664.0,
+      "y": 412.0,
+      "t": 2.574
+    },
+    {
+      "x": 683.0,
+      "y": 407.0,
+      "t": 2.636
+    },
+    {
+      "x": 715.0,
+      "y": 384.0,
+      "t": 2.703
+    },
+    {
+      "x": 762.0,
+      "y": 341.0,
+      "t": 2.803
+    },
+    {
+      "x": 769.0,
+      "y": 329.0,
+      "t": 2.838
+    },
+    {
+      "x": 784.0,
+      "y": 301.0,
+      "t": 2.916
+    },
+    {
+      "x": 808.0,
+      "y": 266.0,
+      "t": 2.976
+    },
+    {
+      "x": 817.0,
+      "y": 251.0,
+      "t": 3.04
+    },
+    {
+      "x": 825.0,
+      "y": 236.0,
+      "t": 3.103
+    },
+    {
+      "x": 831.0,
+      "y": 225.0,
+      "t": 3.17
+    },
+    {
+      "x": 838.0,
+      "y": 209.0,
+      "t": 3.233
+    },
+    {
+      "x": 847.0,
+      "y": 197.0,
+      "t": 3.298
+    },
+    {
+      "x": 858.0,
+      "y": 182.0,
+      "t": 3.363
+    },
+    {
+      "x": 874.0,
+      "y": 168.0,
+      "t": 3.444
+    },
+    {
+      "x": 887.0,
+      "y": 153.0,
+      "t": 3.504
+    },
+    {
+      "x": 891.0,
+      "y": 144.0,
+      "t": 3.57
+    }
+  ],
+  "optimal_path": [
+    {
+      "x": 110.0,
+      "y": 590.0
+    },
+    {
+      "x": 266.0,
+      "y": 554.0
+    },
+    {
+      "x": 442.0,
+      "y": 362.0
+    },
+    {
+      "x": 722.0,
+      "y": 378.0
+    },
+    {
+      "x": 890.0,
+      "y": 110.0
+    }
+  ],
+  "level_name": "Medium-1: Dual Pathways",
+  "game_performance_metrics": {
+    "completion_time_s": 3.57,
+    "minimum_distance": 1017.3,
+    "actual_distance": 1115.0,
+    "actual_distance_px": 1115.0,
+    "path_length_px": 1115.0,
+    "ideal_distance_px": 915.9,
+    "min_path_distance_px": 1017.3,
+    "path_efficiency": 91.2,
+    "path_efficiency_ratio": 0.912,
+    "trajectory_accuracy": 84.9,
+    "mean_path_deviation_px": 20.2,
+    "max_path_deviation_px": 69.5,
+    "rms_path_deviation_px": 25.7,
+    "time_outside_route_s": 0.32,
+    "pct_time_outside": 9.1,
+    "deviation_events": 1,
+    "corridor_adherence_pct": 90.9,
+    "peak_speed_px_s": 837.9,
+    "mean_speed_px_s": 318.0,
+    "smoothness_score": 86.6,
+    "game_smoothness_score": 86.6,
+    "normalised_jerk": 2816.4642,
+    "tremor_index": 0.0272,
+    "rom_width_px": 785.0,
+    "rom_height_px": 439.0,
+    "adaptive_recommendation": {
+      "action": "MAINTAIN",
+      "current_difficulty": "MEDIUM",
+      "target_difficulty": "MEDIUM",
+      "badge_title": "STEADY PRACTICE",
+      "headline": "Steady execution. Suggest repeating current difficulty to practice.",
+      "rationale": "Performance (85% acc, 87 smooth, 0 hits) is developing well.",
+      "criteria_met": {
+        "completion": true,
+        "accuracy": false,
+        "efficiency": true,
+        "smoothness": true,
+        "collisions": true
+      }
+    }
+  }
+}
